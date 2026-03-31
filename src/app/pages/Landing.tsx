@@ -57,14 +57,6 @@ export default function Landing() {
 
   const features = [
     {
-      title: 'Smart Shopping',
-      description: 'Browse thousands of products with intelligent recommendations and seamless checkout.',
-      icon: ShoppingBag,
-      gradient: 'from-blue-500 to-purple-500',
-      benefits: ['AI-powered recommendations', 'One-click checkout', 'Price tracking'],
-      image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=400&h=300&fit=crop',
-    },
-    {
       title: 'Vendor Hub',
       description: 'Powerful tools for vendors to manage inventory, track sales, and grow their business.',
       icon: Store,
@@ -295,7 +287,7 @@ export default function Landing() {
                 Powerful features designed for every user type
               </p>
             </motion.div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
               {features.map((feature, index) => (
                 <motion.div
                   key={feature.title}

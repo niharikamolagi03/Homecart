@@ -1,4 +1,28 @@
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+const API_URL = import.meta.env.VITE_API_URL;
+
+const refreshAccessToken = async () => {
+  const refreshToken = localStorage.getItem('refresh_token');
+  if (!refreshToken) throw new Error('No refresh token available');
+
+  const response = await fetch(`${API_URL}/auth/token/refresh/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh: refreshToken }),
+  });
+
+  if (!response.ok) {
+    // If refresh fails, clear tokens and redirect to login
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+    window.location.href = '/login';
+    throw new Error('Session expired. Please login again.');
+  }
+
+  const data = await response.json();
+  localStorage.setItem('access_token', data.access);
+  return data.access;
+};
 
 const apiCall = async (endpoint, options = {}) => {
   const token = localStorage.getItem('access_token');
@@ -8,7 +32,24 @@ const apiCall = async (endpoint, options = {}) => {
     ...(!isFormData && { 'Content-Type': 'application/json' }),
     ...options.headers,
   };
-  const res = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
+
+  let res = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+
+  // If unauthorized and we have a token, try refreshing
+  if (res.status === 401 && token) {
+    try {
+      const newToken = await refreshAccessToken();
+      // Retry the request with new token
+      const newHeaders = {
+        ...headers,
+        Authorization: `Bearer ${newToken}`,
+      };
+      res = await fetch(`${API_URL}${endpoint}`, { ...options, headers: newHeaders });
+    } catch (refreshError) {
+      throw new Error('Session expired. Please login again.');
+    }
+  }
+
   if (res.status === 204) return null;
   const data = await res.json();
   if (!res.ok) throw new Error(Object.values(data).flat().join(', ') || `HTTP ${res.status}`);
@@ -99,3 +140,12 @@ export const getVendorBilling = () => apiCall('/billing/vendor/');
 export const getVendorRevenueSummary = () => apiCall('/billing/vendor/summary/');
 // Bug 3: real-time stock polling
 export const getVendorStock = () => apiCall('/vendor-products/stock/');
+
+// Reviews
+export const getProductReviews = (shopkeeperProductId) => apiCall(`/reviews/?shopkeeper_product=${shopkeeperProductId}`);
+export const createReview = (data) => apiCall('/reviews/', { method: 'POST', body: JSON.stringify(data) });
+export const getReviewDetail = (id) => apiCall(`/reviews/${id}/`);
+export const updateReview = (id, data) => apiCall(`/reviews/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+export const deleteReview = (id) => apiCall(`/reviews/${id}/`, { method: 'DELETE' });
+export const getMyReviews = () => apiCall('/reviews/my/');
+export const getProductReviewStats = (shopkeeperProductId) => apiCall(`/reviews/${shopkeeperProductId}/stats/`);

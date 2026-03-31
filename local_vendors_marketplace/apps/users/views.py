@@ -4,7 +4,6 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
-from drf_spectacular.utils import extend_schema
 from .models import User, ApprovalRequest
 from .serializers import UserSerializer, RegisterSerializer, LoginSerializer, ApprovalRequestSerializer
 from .permissions import IsAdmin

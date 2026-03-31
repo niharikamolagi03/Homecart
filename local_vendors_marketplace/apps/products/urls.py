@@ -13,6 +13,7 @@ from .views import (
     NotificationListView, MarkNotificationsReadView,
     ShopkeeperBillingListView, MakePaymentView,
     VendorBillingView, VendorRevenueSummaryView, VendorStockView,
+    ProductReviewsView, ProductReviewDetailView, CustomerReviewsView, ProductReviewStatsView,
 )
 
 router = DefaultRouter()
@@ -48,4 +49,9 @@ urlpatterns = [
     path('billing/vendor/summary/', VendorRevenueSummaryView.as_view()),
     # Bug 3: real-time stock polling
     path('vendor-products/stock/', VendorStockView.as_view()),
+    # Reviews
+    path('reviews/', ProductReviewsView.as_view()),
+    path('reviews/<int:pk>/', ProductReviewDetailView.as_view()),
+    path('reviews/my/', CustomerReviewsView.as_view()),
+    path('reviews/<int:shopkeeper_product_id>/stats/', ProductReviewStatsView.as_view()),
 ]

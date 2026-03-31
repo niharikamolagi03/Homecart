@@ -48,8 +48,6 @@ export default function CustomerDashboard() {
     setLoading(true);
     try {
       const [p, c, o] = await Promise.all([getShopkeeperProducts(), getCart(), getOrders()]);
-      console.log('Shopkeeper products:', p);
-      console.log('Cart:', c);
       setProducts(Array.isArray(p) ? p : p.results || []);
       setCart(c);
       setOrders(Array.isArray(o) ? o : o.results || []);
@@ -81,7 +79,6 @@ export default function CustomerDashboard() {
   const handleAddToCart = async (product: any) => {
     try {
       const result = await addToCart({ product_id: product.id, quantity: 1 });
-      console.log('Add to cart result:', result);
       setCart(result);
       showToast(`${product.name} added to cart 🛒`);
     } catch (err: any) {

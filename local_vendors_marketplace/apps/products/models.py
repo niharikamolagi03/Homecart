@@ -153,3 +153,36 @@ class ShopkeeperBilling(models.Model):
         if self.status in (self.Status.PENDING, self.Status.PARTIALLY_PAID) and timezone.now() > self.due_date:
             self.status = self.Status.OVERDUE
             self.save(update_fields=['status'])
+
+
+class Review(models.Model):
+    """Product reviews from verified buyers."""
+    
+    RATING_CHOICES = [(i, str(i)) for i in range(1, 6)]  # 1-5 stars
+    
+    customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews')
+    shopkeeper_product = models.ForeignKey(ShopkeeperProduct, on_delete=models.CASCADE, related_name='reviews')
+    order = models.ForeignKey('orders.Order', on_delete=models.CASCADE, related_name='reviews')
+    rating = models.IntegerField(choices=RATING_CHOICES, help_text='Rating from 1 to 5 stars')
+    comment = models.TextField(blank=True, help_text='Review text (optional)')
+    verified_purchase = models.BooleanField(default=True, help_text='Marked as verified if order is delivered')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        # Ensure one review per customer per product (per order)
+        unique_together = ('customer', 'shopkeeper_product', 'order')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['shopkeeper_product', '-created_at']),
+            models.Index(fields=['customer', 'shopkeeper_product']),
+        ]
+    
+    def __str__(self):
+        return f"Review by {self.customer.name} for {self.shopkeeper_product.name} (★{self.rating})"
+    
+    @property
+    def is_verified_buyer(self):
+        """Check if this is a genuine purchase by checking order status."""
+        from apps.orders.models import Order
+        return self.order.status == Order.Status.DELIVERED

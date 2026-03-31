@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Env files — commit .env.development but NOT .env.production
+.env.production
+.env.local
+.env.*.local
+
+# Misc
+.DS_Store
+*.log

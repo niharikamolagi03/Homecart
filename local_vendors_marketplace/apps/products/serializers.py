@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Category, VendorProduct, ShopkeeperProduct, ProductUsage, Notification, PurchaseRequest, ShopkeeperBilling
+from .models import Category, VendorProduct, ShopkeeperProduct, ProductUsage, Notification, PurchaseRequest, ShopkeeperBilling, Review
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -136,3 +136,75 @@ class ShopkeeperBillingSerializer(serializers.ModelSerializer):
     def get_is_overdue(self, obj):
         from django.utils import timezone
         return obj.status in ('pending', 'partially_paid') and timezone.now() > obj.due_date
+
+
+class ReviewListSerializer(serializers.ModelSerializer):
+    """Serializer for listing reviews (public view)."""
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    is_verified_buyer = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = Review
+        fields = ('id', 'customer_name', 'rating', 'comment', 'verified_purchase', 
+                  'is_verified_buyer', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'verified_purchase', 'is_verified_buyer', 'created_at', 'updated_at')
+
+
+class ReviewCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating reviews (authenticated customers only)."""
+    
+    class Meta:
+        model = Review
+        fields = ('shopkeeper_product', 'order', 'rating', 'comment')
+    
+    def validate(self, data):
+        """Validate that order belongs to the customer and is delivered."""
+        from apps.orders.models import Order
+        
+        customer = self.context['request'].user
+        order = data['order']
+        shopkeeper_product = data['shopkeeper_product']
+        
+        # Verify order belongs to the customer
+        if order.customer != customer:
+            raise serializers.ValidationError("This order does not belong to you.")
+        
+        # Verify order status is DELIVERED
+        if order.status != Order.Status.DELIVERED:
+            raise serializers.ValidationError(
+                f"You can only review products from delivered orders. Current status: {order.status}"
+            )
+        
+        # Verify the product is in the order
+        order_item_exists = order.items.filter(product=shopkeeper_product).exists()
+        if not order_item_exists:
+            raise serializers.ValidationError("This product is not in the selected order.")
+        
+        # Check if customer already reviewed this product from this order
+        existing_review = Review.objects.filter(
+            customer=customer,
+            shopkeeper_product=shopkeeper_product,
+            order=order
+        ).exists()
+        if existing_review:
+            raise serializers.ValidationError("You have already reviewed this product from this order.")
+        
+        return data
+    
+    def create(self, validated_data):
+        """Create review with current user as customer."""
+        validated_data['customer'] = self.context['request'].user
+        validated_data['verified_purchase'] = True
+        return super().create(validated_data)
+
+
+class ReviewDetailSerializer(serializers.ModelSerializer):
+    """Serializer for viewing/updating individual reviews."""
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    is_verified_buyer = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = Review
+        fields = ('id', 'customer_name', 'rating', 'comment', 'verified_purchase', 
+                  'is_verified_buyer', 'created_at', 'updated_at')
+        read_only_fields = ('customer_name', 'verified_purchase', 'is_verified_buyer', 'created_at')

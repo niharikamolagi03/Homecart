@@ -2,7 +2,6 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema
 from .models import Cart, CartItem
 from .serializers import CartSerializer, AddToCartSerializer, UpdateCartItemSerializer
 from apps.products.models import ShopkeeperProduct
@@ -59,7 +58,6 @@ class UpdateCartItemView(generics.GenericAPIView):
 class RemoveFromCartView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(request=None, responses={200: None})
     def delete(self, request, item_id):
         cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
         cart_item.delete()

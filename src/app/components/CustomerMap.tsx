@@ -25,7 +25,7 @@ export default function CustomerMap({ orderId, customerLat, customerLng }: Props
     const token = localStorage.getItem('access_token');
     if (!token) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/delivery/location/${orderId}/`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/delivery/location/${orderId}/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) { setStatus('Delivery location not available yet'); return; }

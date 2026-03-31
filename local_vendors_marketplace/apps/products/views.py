@@ -2,11 +2,13 @@ from rest_framework import viewsets, generics, permissions, filters, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from django.db.models import Avg, Count, Q
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Category, VendorProduct, ShopkeeperProduct, ProductUsage
+from .models import Category, VendorProduct, ShopkeeperProduct, ProductUsage, Review
 from .serializers import (
     CategorySerializer, VendorProductSerializer, VendorProductCreateSerializer,
-    ShopkeeperProductSerializer, AddToShopSerializer
+    ShopkeeperProductSerializer, AddToShopSerializer, ReviewListSerializer, 
+    ReviewCreateSerializer, ReviewDetailSerializer
 )
 
 
@@ -623,3 +625,122 @@ class VendorStockView(APIView):
             vendor=request.user
         ).values('id', 'name', 'stock')
         return Response(list(products))
+
+
+# ── REVIEW VIEWS ──────────────────────────────────────────────────────────────
+
+class ProductReviewsView(generics.ListCreateAPIView):
+    """
+    List all reviews for a product (public - no auth required).
+    Create a new review (authenticated customers who received the product).
+    """
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['shopkeeper_product']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        """Return all reviews for public viewing."""
+        if getattr(self, 'swagger_fake_view', False):
+            return Review.objects.none()
+        return Review.objects.select_related(
+            'customer', 'shopkeeper_product', 'order'
+        ).all()
+
+    def get_serializer_class(self):
+        """Use different serializers for list vs create."""
+        if self.request.method == 'POST':
+            return ReviewCreateSerializer
+        return ReviewListSerializer
+
+    def get_permissions(self):
+        """Allow creation only for authenticated users."""
+        if self.request.method == 'POST':
+            return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
+
+    def perform_create(self, serializer):
+        """Create the review."""
+        serializer.save()
+
+    def create(self, request, *args, **kwargs):
+        """Override to provide more helpful error messages."""
+        return super().create(request, *args, **kwargs)
+
+
+class ProductReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    View, update, or delete an individual review.
+    Only the review author can update or delete their review.
+    """
+    queryset = Review.objects.select_related('customer', 'shopkeeper_product', 'order')
+    serializer_class = ReviewDetailSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """Restrict to reviews by the current user (for edit/delete)."""
+        if self.request.method == 'GET':
+            # Allow viewing any review
+            return Review.objects.select_related('customer', 'shopkeeper_product', 'order')
+        # Only allow users to edit/delete their own reviews
+        return Review.objects.filter(customer=self.request.user)
+
+    def perform_update(self, serializer):
+        """Ensure only the author can update."""
+        if serializer.instance.customer != self.request.user:
+            raise permissions.PermissionDenied("You can only edit your own reviews.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        """Ensure only the author can delete."""
+        if instance.customer != self.request.user:
+            raise permissions.PermissionDenied("You can only delete your own reviews.")
+        instance.delete()
+
+
+class CustomerReviewsView(generics.ListAPIView):
+    """List all reviews submitted by the authenticated customer."""
+    serializer_class = ReviewListSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """Return only reviews by the current customer."""
+        if getattr(self, 'swagger_fake_view', False):
+            return Review.objects.none()
+        return Review.objects.filter(
+            customer=self.request.user
+        ).select_related('shopkeeper_product', 'order').order_by('-created_at')
+
+
+class ProductReviewStatsView(APIView):
+    """Get review statistics for a product (average rating, total reviews, etc)."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, shopkeeper_product_id):
+        """Return review statistics for a product."""
+        stats = Review.objects.filter(
+            shopkeeper_product_id=shopkeeper_product_id
+        ).aggregate(
+            average_rating=Avg('rating'),
+            total_reviews=Count('id'),
+            five_star=Count('id', filter=Q(rating=5)),
+            four_star=Count('id', filter=Q(rating=4)),
+            three_star=Count('id', filter=Q(rating=3)),
+            two_star=Count('id', filter=Q(rating=2)),
+            one_star=Count('id', filter=Q(rating=1)),
+            verified_reviews=Count('id', filter=Q(verified_purchase=True)),
+        )
+        
+        return Response({
+            'shopkeeper_product_id': shopkeeper_product_id,
+            'average_rating': stats['average_rating'],
+            'total_reviews': stats['total_reviews'],
+            'verified_reviews': stats['verified_reviews'],
+            'rating_distribution': {
+                '5': stats['five_star'],
+                '4': stats['four_star'],
+                '3': stats['three_star'],
+                '2': stats['two_star'],
+                '1': stats['one_star'],
+            }
+        })

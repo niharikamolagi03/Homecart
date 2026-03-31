@@ -156,7 +156,7 @@ export default function Login() {
             <Button 
               variant="outline" 
               className="border-gray-200 hover:bg-gray-50"
-              onClick={() => console.log('Google login')}
+              onClick={() => {}}
             >
               <Chrome className="w-5 h-5 mr-2" />
               Google
@@ -164,7 +164,7 @@ export default function Login() {
             <Button 
               variant="outline" 
               className="border-gray-200 hover:bg-gray-50"
-              onClick={() => console.log('Apple login')}
+              onClick={() => {}}
             >
               <Apple className="w-5 h-5 mr-2" />
               Apple

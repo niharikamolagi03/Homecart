@@ -64,7 +64,7 @@ export default function Checkout({ cartTotal, onSuccess, onCancel }: Props) {
     const coords = await geocodeAddress(address);
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/orders/place/', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/orders/place/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -75,7 +75,6 @@ export default function Checkout({ cartTotal, onSuccess, onCancel }: Props) {
         }),
       });
       const data = await res.json();
-      console.log('Order response:', data);
       if (!res.ok) { setError(data.error || JSON.stringify(data)); return; }
       setStep('success');
       setTimeout(() => onSuccess(), 2000);

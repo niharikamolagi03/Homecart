@@ -46,7 +46,6 @@ export default function VendorDashboard() {
   const loadProducts = useCallback(async () => {
     try {
       const data = await getMyVendorProducts();
-      console.log('Vendor products:', data);
       setProducts(Array.isArray(data) ? data : data.results || []);
     } catch (err: any) {
       console.error('Failed to load products:', err);

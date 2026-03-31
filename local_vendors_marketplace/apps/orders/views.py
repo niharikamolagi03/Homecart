@@ -4,7 +4,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from django.db import transaction
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema
 from .models import Order, OrderItem, VendorApproval
 from .serializers import OrderSerializer, PlaceOrderSerializer, UpdateOrderStatusSerializer, BulkOrderSerializer, VendorApprovalSerializer, VendorApprovalActionSerializer
 from apps.cart.models import Cart
@@ -115,7 +114,6 @@ class UpdateOrderStatusView(generics.GenericAPIView):
 class CancelOrderView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(request=None, responses={200: None})
     def delete(self, request, pk):
         order = get_object_or_404(Order, id=pk, customer=request.user)
         if order.status not in ['PENDING', 'ACCEPTED']:

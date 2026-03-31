@@ -101,7 +101,7 @@ export default function Register() {
       if (selfieFile) fd.append('selfie', selfieFile);
       if (idFile) fd.append('id_document', idFile);
 
-      const res = await fetch('http://127.0.0.1:8000/api/auth/register/', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/register/`, {
         method: 'POST',
         body: fd, // no Content-Type header — browser sets multipart boundary
       });
