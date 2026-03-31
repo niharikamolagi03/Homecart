@@ -1,0 +1,240 @@
+Create a modern, production-ready frontend for a marketplace web application called "HomeCart" using **Django templating (HTML, CSS, JavaScript)** — NOT React.
+
+### ⚙️ TECH STACK:
+
+* Django Templates (Jinja-like syntax)
+* HTML5, CSS3, JavaScript (Vanilla or minimal Alpine.js)
+* Tailwind CSS (preferred) OR clean custom CSS
+* Use Django static and template tags:
+
+  * {% load static %}
+  * {% url 'route_name' %}
+
+---
+
+## 🎨 DESIGN SYSTEM
+
+### Design Principles:
+
+* Glass morphism UI with backdrop blur (backdrop-filter: blur)
+* Soft pastel gradients (blue, purple, cyan)
+* Smooth micro-interactions (hover, transitions)
+* 8px spacing grid system
+* Fully responsive (mobile-first)
+
+---
+
+### 🎨 Color Palette:
+
+Primary:
+
+* #3B82F6 (Blue)
+* #8B5CF6 (Purple)
+* #06B6D4 (Cyan)
+
+Background:
+
+* #F8FAFC, #F1F5F9, #EFF6FF
+
+Accents:
+
+* #10B981, #F59E0B, #EF4444
+
+Text:
+
+* #0F172A, #475569, #64748B
+
+---
+
+### 🔤 Typography:
+
+* Font: Inter (Google Fonts)
+* H1: 48px, H2: 36px, H3: 24px
+* Body: 16px
+* Labels: 14px
+
+---
+
+## 📄 PAGES TO CREATE
+
+---
+
+### 1. Landing Page (home.html)
+
+* Hero section with gradient background
+
+* Headline: "Welcome to HomeCart - Your Marketplace Revolution"
+
+* CTA button with hover animation
+
+* Animated floating icons (CSS-based)
+
+* Stats section (Users, Vendors, Cities)
+
+* Features Grid (4 cards):
+
+  * Shopping
+  * Vendor Hub
+  * Delivery
+  * Security
+
+* Testimonials section
+
+---
+
+### 2. Role Selection Page (roles.html)
+
+* 5 responsive cards:
+
+  * Customer
+  * Vendor
+  * Shopkeeper
+  * Delivery Partner
+  * Admin
+
+Each card must include:
+
+* Icon (use SVG or emoji)
+* Gradient background
+* Hover scale animation
+* Button → redirect using Django URL
+
+---
+
+### 3. Authentication Pages
+
+(login.html, register.html)
+
+* Glass morphism form card
+* Input fields with validation styles
+* Social login buttons UI (Google, Apple)
+* "Forgot password"
+* Role-based conditional fields
+
+---
+
+### 4. DASHBOARDS (separate templates)
+
+Create reusable layout:
+
+* base_dashboard.html (sidebar + topbar)
+
+Then extend:
+
+#### Admin Dashboard
+
+* Analytics cards
+* User table
+* Charts (use Chart.js)
+* Activity feed
+
+#### Vendor Dashboard
+
+* Sales charts
+* Product grid
+* Orders table
+
+#### Shopkeeper Dashboard
+
+* Inventory alerts
+* Local stats
+
+#### Customer Dashboard
+
+* Product cards
+* Cart UI
+* Order history
+
+#### Delivery Dashboard
+
+* Map placeholder
+* Delivery list
+* Earnings stats
+
+---
+
+## 🧩 COMPONENT SYSTEM
+
+Create reusable partials using Django includes:
+
+* components/navbar.html
+* components/sidebar.html
+* components/cards.html
+* components/buttons.html
+* components/forms.html
+
+---
+
+## ✨ UI FEATURES
+
+* Glass effect:
+  backdrop-filter: blur(12px);
+  background: rgba(255,255,255,0.2);
+
+* Hover animations:
+  transform: scale(1.05);
+  transition: all 0.3s ease;
+
+* Skeleton loaders
+
+* Toast notifications (JS-based)
+
+---
+
+## 📱 RESPONSIVENESS
+
+Breakpoints:
+
+* Mobile: 320px
+* Tablet: 768px
+* Laptop: 1024px
+* Desktop: 1440px
+
+---
+
+## 📁 DJANGO STRUCTURE
+
+Follow this structure:
+
+templates/
+base.html
+home.html
+roles.html
+auth/
+login.html
+register.html
+dashboard/
+admin.html
+vendor.html
+shopkeeper.html
+customer.html
+delivery.html
+components/
+
+static/
+css/
+js/
+images/
+
+---
+
+## ⚡ OUTPUT REQUIREMENTS
+
+* Clean, readable HTML templates
+* Use Django template inheritance
+* Use {% block content %}
+* Use {% include %} for components
+* Tailwind classes OR structured CSS
+* Add comments in code for clarity
+
+---
+
+## 🎯 GOAL
+
+Deliver a visually stunning, scalable, and modular Django frontend that:
+
+* Looks like a modern SaaS product
+* Supports multiple user roles
+* Is easy to connect with Django backend later
+
+Do NOT include backend logic — frontend only.
