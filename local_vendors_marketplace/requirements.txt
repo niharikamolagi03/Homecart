@@ -1,7 +1,6 @@
-# Core
-setuptools==68.2.2
-wheel
-gunicorn
+setuptools>=68.0.0
+wheel>=0.41.0
+gunicorn==21.2.0
 Django==4.2.7
 djangorestframework==3.14.0
 djangorestframework-simplejwt==5.3.0
@@ -10,17 +9,6 @@ django-filter==23.5
 python-dotenv==1.0.0
 drf-spectacular==0.27.2
 drf-spectacular-sidecar==2024.7.1
-
-# Production server
-gunicorn==21.2.0
-
-# Static files
 whitenoise==6.6.0
-
-# PostgreSQL
 psycopg2-binary==2.9.9
 dj-database-url==2.1.0
-
-# Compatibility
-setuptools>=68.0.0
-wheel>=0.41.0

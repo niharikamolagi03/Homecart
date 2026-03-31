@@ -10,11 +10,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ---------------------------------------------------------------------------
 # SECURITY
 # ---------------------------------------------------------------------------
-SECRET_KEY = os.environ['SECRET_KEY']  # No fallback — must be set in .env
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-temporary-build-key')
 
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+ALLOWED_HOSTS = ['*']  # Render + any frontend can reach the API
 
 # ---------------------------------------------------------------------------
 # APPLICATIONS
@@ -26,16 +26,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
-    # Third-party
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'django_filters',
     'drf_spectacular',
     'drf_spectacular_sidecar',
-
-    # Local apps
     'apps.users',
     'apps.vendors',
     'apps.products',
@@ -45,11 +41,12 @@ INSTALLED_APPS = [
 ]
 
 # ---------------------------------------------------------------------------
-# MIDDLEWARE — WhiteNoise added only if installed
+# MIDDLEWARE — WhiteNoise right after SecurityMiddleware
 # ---------------------------------------------------------------------------
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -57,13 +54,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-
-try:
-    import whitenoise  # noqa
-    MIDDLEWARE.insert(2, 'whitenoise.middleware.WhiteNoiseMiddleware')
-    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-except ImportError:
-    pass
 
 ROOT_URLCONF = 'core.urls'
 
@@ -86,26 +76,16 @@ TEMPLATES = [
 WSGI_APPLICATION = 'core.wsgi.application'
 
 # ---------------------------------------------------------------------------
-# DATABASE — PostgreSQL via DATABASE_URL, falls back to SQLite for local dev
+# DATABASE — PostgreSQL on Render via DATABASE_URL, SQLite locally
 # ---------------------------------------------------------------------------
-DATABASE_URL = os.getenv('DATABASE_URL', '')
+import dj_database_url
 
-try:
-    import dj_database_url
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
-            conn_max_age=600,
-        )
-    }
-except ImportError:
-    # dj_database_url not installed — use SQLite for local dev
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+DATABASES = {
+    'default': dj_database_url.config(
+        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        conn_max_age=600,
+    )
+}
 
 # ---------------------------------------------------------------------------
 # PASSWORD VALIDATION
@@ -164,6 +144,7 @@ USE_TZ = True
 # ---------------------------------------------------------------------------
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -180,18 +161,9 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 # ---------------------------------------------------------------------------
-# CORS — open in dev, locked to Vercel frontend in production
+# CORS — allow all origins so React frontend can reach the API
 # ---------------------------------------------------------------------------
-if DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True
-else:
-    CORS_ALLOW_ALL_ORIGINS = False
-    CORS_ALLOWED_ORIGINS = [
-        origin.strip()
-        for origin in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',')
-        if origin.strip()
-    ]
-
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_HEADERS = [
@@ -216,13 +188,13 @@ CORS_ALLOW_METHODS = [
 ]
 
 # ---------------------------------------------------------------------------
-# SECURITY HEADERS — only enforced when DEBUG=False
+# SECURITY HEADERS
+# Render terminates SSL at load balancer — never redirect to HTTPS from Django
 # ---------------------------------------------------------------------------
+SECURE_SSL_REDIRECT = False
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 if not DEBUG:
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-    SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
