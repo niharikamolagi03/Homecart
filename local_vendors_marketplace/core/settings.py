@@ -180,7 +180,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 # ---------------------------------------------------------------------------
-# CORS — open in dev, locked to env var in production
+# CORS — open in dev, locked to Vercel frontend in production
 # ---------------------------------------------------------------------------
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True

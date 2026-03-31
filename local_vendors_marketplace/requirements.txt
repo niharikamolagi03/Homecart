@@ -20,3 +20,4 @@ dj-database-url==2.1.0
 
 # Compatibility
 setuptools>=68.0.0
+wheel>=0.41.0
