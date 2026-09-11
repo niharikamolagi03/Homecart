@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { API_BASE_URL } from '@/services/api';
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -18,6 +19,7 @@ interface Props {
 export default function CustomerMap({ orderId, customerLat, customerLng }: Props) {
   const mapRef = useRef<L.Map | null>(null);
   const agentMarkerRef = useRef<L.Marker | null>(null);
+  const routeRef = useRef<L.Polyline | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState('Fetching delivery location...');
 
@@ -25,7 +27,7 @@ export default function CustomerMap({ orderId, customerLat, customerLng }: Props
     const token = localStorage.getItem('access_token');
     if (!token) return;
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/delivery/location/${orderId}/`, {
+      const res = await fetch(`${API_BASE_URL}/delivery/location/${orderId}/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) { setStatus('Delivery location not available yet'); return; }
@@ -45,8 +47,22 @@ export default function CustomerMap({ orderId, customerLat, customerLng }: Props
       } else {
         agentMarkerRef.current.setLatLng([latitude, longitude]);
       }
-      mapRef.current.panTo([latitude, longitude]);
-      setStatus('Live tracking active');
+      if (customerLat && customerLng) {
+        try {
+          const routeResponse = await fetch(`https://router.project-osrm.org/route/v1/driving/${longitude},${latitude};${customerLng},${customerLat}?overview=full&geometries=geojson`);
+          const routeData = await routeResponse.json();
+          const points: [number, number][] = routeData.routes?.[0]?.geometry?.coordinates.map(([lng, lat]: [number, number]) => [lat, lng]) || [];
+          if (points.length) {
+            routeRef.current?.remove();
+            routeRef.current = L.polyline(points, { color: '#16a34a', weight: 5, opacity: 0.8 }).addTo(mapRef.current);
+            mapRef.current.fitBounds(routeRef.current.getBounds(), { padding: [36, 36] });
+          }
+        } catch { mapRef.current.panTo([latitude, longitude]); }
+      } else {
+        mapRef.current.panTo([latitude, longitude]);
+      }
+      const updatedAt = data.timestamp ? new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'now';
+      setStatus(`Live tracking active · updated ${updatedAt}`);
     } catch {
       setStatus('Unable to fetch location');
     }

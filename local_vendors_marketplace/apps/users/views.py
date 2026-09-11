@@ -33,7 +33,39 @@ class RegisterView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            ai_score = self._run_ai_verification(selfie, id_document)
+            # Read both files into memory BEFORE any verification code consumes
+            # the temp file. Django moves temp files on save; if a verifier reads
+            # the file pointer first the temp path no longer exists when Django
+            # tries to move it, causing FileNotFoundError.
+            from django.core.files.uploadedfile import InMemoryUploadedFile
+            import io
+
+            selfie_bytes = selfie.read()
+            selfie.seek(0)
+            selfie_mem = InMemoryUploadedFile(
+                io.BytesIO(selfie_bytes),
+                field_name='selfie',
+                name=selfie.name,
+                content_type=selfie.content_type,
+                size=len(selfie_bytes),
+                charset=None,
+            )
+
+            id_bytes = id_document.read()
+            id_document.seek(0)
+            id_mem = InMemoryUploadedFile(
+                io.BytesIO(id_bytes),
+                field_name='id_document',
+                name=id_document.name,
+                content_type=id_document.content_type,
+                size=len(id_bytes),
+                charset=None,
+            )
+
+            ai_score = self._run_ai_verification(selfie_mem, id_mem)
+            # Reset for classification step
+            selfie_mem.seek(0)
+            id_mem.seek(0)
 
         # ── Create user ───────────────────────────────────────────────────────
         serializer = RegisterSerializer(data=request.data)
@@ -43,11 +75,13 @@ class RegisterView(APIView):
         # ── Apply AI result ───────────────────────────────────────────────────
         if needs_verification and ai_score is not None:
             decision = 'REAL' if ai_score >= 0.9 else 'SUSPICIOUS'
-            report = self._generate_kyc_report(ai_score, id_document)
+            report = self._generate_kyc_report(ai_score, id_mem)
 
             # ── Classify role based on image context ─────────────────────────
+            selfie_mem.seek(0)
+            id_mem.seek(0)
             try:
-                classification_result = RoleClassifier.classify_role(selfie, id_document)
+                classification_result = RoleClassifier.classify_role(selfie_mem, id_mem)
                 classification_json = RoleClassifier.to_json(classification_result)
             except Exception as e:
                 classification_result = {
@@ -62,14 +96,17 @@ class RegisterView(APIView):
                 classification_json = RoleClassifier.to_json(classification_result)
 
             # include classification and authenticity info in KYC report text
-            report = self._generate_kyc_report(ai_score, id_document, classification_result)
+            report = self._generate_kyc_report(ai_score, id_mem, classification_result)
+
+            # Reset mem files so Django can save them to disk
+            selfie_mem.seek(0)
+            id_mem.seek(0)
 
             user.kyc_score = ai_score
             user.kyc_decision = decision
             user.kyc_report = report
-            user.id_document = id_document
-            if selfie is not None:
-                user.profile_image = selfie
+            user.id_document = id_mem
+            user.profile_image = selfie_mem
 
             # Store classification result
             user.role_classification = classification_result.get('classification', 'Inconclusive')

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { MapPin, CreditCard, X, Smartphone, Banknote, CheckCircle } from 'lucide-react';
+import { MapPin, X, Smartphone, Banknote, CheckCircle, Navigation } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { placeOrder } from '@/services/api';
 
 interface Props {
   cartTotal: number;
@@ -10,7 +11,7 @@ interface Props {
   onCancel: () => void;
 }
 
-type PaymentMethod = 'CASH' | 'UPI' | 'CARD';
+type PaymentMethod = 'CASH' | 'UPI';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
@@ -20,12 +21,27 @@ export default function Checkout({ cartTotal, onSuccess, onCancel }: Props) {
   const [address, setAddress] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
   const [payment, setPayment] = useState<PaymentMethod>('CASH');
   const [upiId, setUpiId] = useState('');
-  const [card, setCard] = useState({ number: '', expiry: '', cvv: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Reverse geocode coords → readable address
+  const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+      );
+      const data = await res.json();
+      return data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    } catch {
+      return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    }
+  };
+
+  // Forward geocode typed address → coords
   const geocodeAddress = async (addr: string) => {
     try {
       const res = await fetch(
@@ -37,45 +53,56 @@ export default function Checkout({ cartTotal, onSuccess, onCancel }: Props) {
     return null;
   };
 
-  const handleDetailsNext = () => {
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) { setError('Geolocation is not supported by your browser.'); return; }
+    setLocating(true);
+    setError('');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        setCoords({ lat, lng });
+        const readable = await reverseGeocode(lat, lng);
+        setAddress(readable);
+        setLocating(false);
+      },
+      () => {
+        setError('Location access denied. Please enter your address manually.');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleDetailsNext = async () => {
     if (!name.trim()) { setError('Please enter your name'); return; }
     if (!phone.trim()) { setError('Please enter your phone number'); return; }
     if (!address.trim()) { setError('Please enter delivery address'); return; }
     setError('');
+
+    // If no GPS coords yet (manual address), geocode the typed address
+    if (!coords) {
+      const geocoded = await geocodeAddress(address);
+      if (geocoded) setCoords(geocoded);
+    }
     setStep('payment');
   };
 
-  const validatePayment = () => {
-    if (payment === 'UPI' && !upiId.includes('@')) {
-      setError('Please enter a valid UPI ID (e.g. name@upi)'); return false;
-    }
-    if (payment === 'CARD') {
-      if (card.number.replace(/\s/g, '').length < 16) { setError('Enter valid 16-digit card number'); return false; }
-      if (!card.expiry.includes('/')) { setError('Enter expiry as MM/YY'); return false; }
-      if (card.cvv.length < 3) { setError('Enter valid CVV'); return false; }
-    }
-    return true;
-  };
-
   const handlePlaceOrder = async () => {
-    if (!validatePayment()) return;
+    if (payment === 'UPI' && !upiId.includes('@')) {
+      setError('Please enter a valid UPI ID (e.g. name@upi)'); return;
+    }
     setLoading(true); setError('');
-    const token = localStorage.getItem('access_token');
-    const coords = await geocodeAddress(address);
+    // Last-chance geocode if still no coords
+    let finalCoords = coords;
+    if (!finalCoords) finalCoords = await geocodeAddress(address);
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/orders/place/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          delivery_address: `${name}, ${phone}, ${address}`,
-          payment_method: payment,
-          latitude: coords?.lat || null,
-          longitude: coords?.lng || null,
-        }),
+      await placeOrder({
+        delivery_address: `${name}, ${phone}, ${address}`,
+        payment_method: payment,
+        latitude: finalCoords?.lat || null,
+        longitude: finalCoords?.lng || null,
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || JSON.stringify(data)); return; }
       setStep('success');
       setTimeout(() => onSuccess(), 2000);
     } catch (err: any) {
@@ -91,7 +118,7 @@ export default function Checkout({ cartTotal, onSuccess, onCancel }: Props) {
             <CheckCircle className="w-8 h-8 text-green-600" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Order Placed!</h2>
-          <p className="text-gray-500">Your order has been placed successfully. A delivery agent has been assigned.</p>
+          <p className="text-gray-500">Your order has been placed and a delivery partner has been notified.</p>
         </div>
       </div>
     );
@@ -129,8 +156,25 @@ export default function Checkout({ cartTotal, onSuccess, onCancel }: Props) {
                   rows={3}
                   placeholder="House No, Street, City, State, PIN"
                   value={address}
-                  onChange={e => setAddress(e.target.value)}
+                  onChange={e => { setAddress(e.target.value); setCoords(null); }}
                 />
+                {/* Use current location button */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 w-full border-blue-200 text-blue-600 hover:bg-blue-50"
+                  onClick={handleUseMyLocation}
+                  disabled={locating}
+                >
+                  <Navigation className="w-4 h-4 mr-2" />
+                  {locating ? 'Detecting location...' : 'Use my current location'}
+                </Button>
+                {coords && (
+                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> Location detected — delivery partner will see your pin on the map
+                  </p>
+                )}
               </div>
 
               {/* Order Summary */}
@@ -156,26 +200,24 @@ export default function Checkout({ cartTotal, onSuccess, onCancel }: Props) {
           {step === 'payment' && (
             <>
               <Label>Select Payment Method</Label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {([
-                  { id: 'CASH', label: 'Cash on Delivery', icon: '💵', desc: 'Pay on delivery' },
+                  { id: 'CASH', label: 'Cash on Delivery', icon: '💵', desc: 'Pay when delivered' },
                   { id: 'UPI', label: 'UPI', icon: '📱', desc: 'GPay, PhonePe' },
-                  { id: 'CARD', label: 'Card', icon: '💳', desc: 'Debit/Credit' },
                 ] as const).map(m => (
                   <button
                     key={m.id}
                     type="button"
                     onClick={() => { setPayment(m.id); setError(''); }}
-                    className={`p-3 rounded-xl border-2 text-center transition-all ${payment === m.id ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
+                    className={`p-4 rounded-xl border-2 text-center transition-all ${payment === m.id ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
                   >
-                    <div className="text-2xl mb-1">{m.icon}</div>
+                    <div className="text-3xl mb-1">{m.icon}</div>
                     <div className="text-sm font-semibold">{m.label}</div>
                     <div className="text-xs text-gray-400">{m.desc}</div>
                   </button>
                 ))}
               </div>
 
-              {/* UPI Input */}
               {payment === 'UPI' && (
                 <div>
                   <Label className="flex items-center gap-2"><Smartphone className="w-4 h-4" /> UPI ID</Label>
@@ -184,43 +226,6 @@ export default function Checkout({ cartTotal, onSuccess, onCancel }: Props) {
                 </div>
               )}
 
-              {/* Card Input */}
-              {payment === 'CARD' && (
-                <div className="space-y-3">
-                  <div>
-                    <Label className="flex items-center gap-2"><CreditCard className="w-4 h-4" /> Card Number</Label>
-                    <Input className="mt-1" placeholder="1234 5678 9012 3456" maxLength={19}
-                      value={card.number}
-                      onChange={e => {
-                        const v = e.target.value.replace(/\D/g, '').slice(0, 16);
-                        setCard(c => ({ ...c, number: v.replace(/(.{4})/g, '$1 ').trim() }));
-                      }}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label>Expiry (MM/YY)</Label>
-                      <Input className="mt-1" placeholder="12/27" maxLength={5}
-                        value={card.expiry}
-                        onChange={e => {
-                          let v = e.target.value.replace(/\D/g, '').slice(0, 4);
-                          if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2);
-                          setCard(c => ({ ...c, expiry: v }));
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <Label>CVV</Label>
-                      <Input className="mt-1" placeholder="123" maxLength={3} type="password"
-                        value={card.cvv}
-                        onChange={e => setCard(c => ({ ...c, cvv: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Cash info */}
               {payment === 'CASH' && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-center gap-2">
                   <Banknote className="w-5 h-5 text-yellow-600 shrink-0" />
@@ -228,8 +233,8 @@ export default function Checkout({ cartTotal, onSuccess, onCancel }: Props) {
                 </div>
               )}
 
-              <div className="bg-gray-50 rounded-xl p-3 text-sm">
-                <div className="flex justify-between font-bold">
+              <div className="bg-gray-50 rounded-xl p-3">
+                <div className="flex justify-between font-bold text-sm">
                   <span>Total to pay</span>
                   <span className="text-blue-600">{fmt(cartTotal)}</span>
                 </div>
@@ -238,7 +243,7 @@ export default function Checkout({ cartTotal, onSuccess, onCancel }: Props) {
               <div className="flex gap-3">
                 <Button variant="outline" onClick={() => setStep('details')} className="flex-1">← Back</Button>
                 <Button onClick={handlePlaceOrder} disabled={loading} className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                  {loading ? 'Placing...' : `Pay ${fmt(cartTotal)}`}
+                  {loading ? 'Placing...' : `Place Order`}
                 </Button>
               </div>
             </>

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Order, OrderItem, VendorApproval
+from .models import Order, OrderItem, VendorApproval, CustomerBulkRequest
 from apps.products.serializers import ShopkeeperProductSerializer
 from apps.users.serializers import UserSerializer
 
@@ -32,7 +32,7 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ('id', 'customer', 'shopkeeper_name', 'delivery_name', 'items',
-                  'total_price', 'status', 'payment_status',
+                  'total_price', 'status', 'payment_status', 'payment_method',
                   'delivery_address', 'latitude', 'longitude',
                   'assigned_delivery', 'bulk', 'vendor_approvals', 'created_at', 'updated_at')
         read_only_fields = ('id', 'created_at', 'updated_at')
@@ -42,7 +42,19 @@ class PlaceOrderSerializer(serializers.Serializer):
     delivery_address = serializers.CharField()
     latitude = serializers.FloatField(required=False, allow_null=True)
     longitude = serializers.FloatField(required=False, allow_null=True)
-    payment_method = serializers.ChoiceField(choices=['CASH', 'CARD'], default='CASH')
+    payment_method = serializers.ChoiceField(choices=['CASH', 'UPI'], default='CASH')
+
+
+class CustomerBulkRequestSerializer(serializers.ModelSerializer):
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    vendor_name = serializers.CharField(source='vendor.name', read_only=True)
+
+    class Meta:
+        model = CustomerBulkRequest
+        fields = ('id', 'customer_name', 'vendor_name', 'product_name', 'quantity',
+                  'notes', 'status', 'vendor_response', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'customer_name', 'vendor_name', 'status',
+                            'vendor_response', 'created_at', 'updated_at')
 
 
 class UpdateOrderStatusSerializer(serializers.Serializer):

@@ -10,13 +10,14 @@ class CategorySerializer(serializers.ModelSerializer):
 
 class VendorProductSerializer(serializers.ModelSerializer):
     vendor_name = serializers.CharField(source='vendor.name', read_only=True)
+    vendor_id = serializers.IntegerField(source='vendor.id', read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True)
     image_url = serializers.SerializerMethodField()
     shopkeeper_count = serializers.SerializerMethodField()
 
     class Meta:
         model = VendorProduct
-        fields = ('id', 'vendor_name', 'name', 'description', 'base_price', 'stock',
+        fields = ('id', 'vendor_id', 'vendor_name', 'name', 'description', 'base_price', 'stock',
                   'category', 'category_name', 'image', 'image_url', 'shopkeeper_count', 'created_at')
         read_only_fields = ('id', 'created_at')
 
@@ -25,7 +26,7 @@ class VendorProductSerializer(serializers.ModelSerializer):
         if obj.image:
             if request:
                 return request.build_absolute_uri(obj.image.url)
-            return f'http://127.0.0.1:8000{obj.image.url}'
+            return obj.image.url  # relative path — no hardcoded host
         return None
 
     def get_shopkeeper_count(self, obj):
@@ -71,7 +72,7 @@ class ShopkeeperProductSerializer(serializers.ModelSerializer):
         if obj.image:
             if request:
                 return request.build_absolute_uri(obj.image.url)
-            return f'http://127.0.0.1:8000{obj.image.url}'
+            return obj.image.url  # relative path — no hardcoded host
         return None
 
 
@@ -105,7 +106,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
         if obj.product.image:
             if request:
                 return request.build_absolute_uri(obj.product.image.url)
-            return f'http://127.0.0.1:8000{obj.product.image.url}'
+            return obj.product.image.url  # relative path — no hardcoded host
         return None
 
 
@@ -142,44 +143,44 @@ class ReviewListSerializer(serializers.ModelSerializer):
     """Serializer for listing reviews (public view)."""
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     is_verified_buyer = serializers.BooleanField(read_only=True)
-    
+
     class Meta:
         model = Review
-        fields = ('id', 'customer_name', 'rating', 'comment', 'verified_purchase', 
+        fields = ('id', 'customer_name', 'rating', 'comment', 'verified_purchase',
                   'is_verified_buyer', 'created_at', 'updated_at')
         read_only_fields = ('id', 'verified_purchase', 'is_verified_buyer', 'created_at', 'updated_at')
 
 
 class ReviewCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating reviews (authenticated customers only)."""
-    
+
     class Meta:
         model = Review
         fields = ('shopkeeper_product', 'order', 'rating', 'comment')
-    
+
     def validate(self, data):
         """Validate that order belongs to the customer and is delivered."""
         from apps.orders.models import Order
-        
+
         customer = self.context['request'].user
         order = data['order']
         shopkeeper_product = data['shopkeeper_product']
-        
+
         # Verify order belongs to the customer
         if order.customer != customer:
             raise serializers.ValidationError("This order does not belong to you.")
-        
+
         # Verify order status is DELIVERED
         if order.status != Order.Status.DELIVERED:
             raise serializers.ValidationError(
                 f"You can only review products from delivered orders. Current status: {order.status}"
             )
-        
+
         # Verify the product is in the order
         order_item_exists = order.items.filter(product=shopkeeper_product).exists()
         if not order_item_exists:
             raise serializers.ValidationError("This product is not in the selected order.")
-        
+
         # Check if customer already reviewed this product from this order
         existing_review = Review.objects.filter(
             customer=customer,
@@ -188,9 +189,9 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
         ).exists()
         if existing_review:
             raise serializers.ValidationError("You have already reviewed this product from this order.")
-        
+
         return data
-    
+
     def create(self, validated_data):
         """Create review with current user as customer."""
         validated_data['customer'] = self.context['request'].user
@@ -202,9 +203,9 @@ class ReviewDetailSerializer(serializers.ModelSerializer):
     """Serializer for viewing/updating individual reviews."""
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     is_verified_buyer = serializers.BooleanField(read_only=True)
-    
+
     class Meta:
         model = Review
-        fields = ('id', 'customer_name', 'rating', 'comment', 'verified_purchase', 
+        fields = ('id', 'customer_name', 'rating', 'comment', 'verified_purchase',
                   'is_verified_buyer', 'created_at', 'updated_at')
         read_only_fields = ('customer_name', 'verified_purchase', 'is_verified_buyer', 'created_at')

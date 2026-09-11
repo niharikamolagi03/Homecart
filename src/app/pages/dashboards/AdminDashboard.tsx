@@ -1,22 +1,19 @@
 import { getAdminData, resetMarketplaceData, getPendingUsers, approveUser, rejectUser } from '@/services/api';
 import { useNavigate } from 'react-router';
 import {
-  LayoutDashboard, Users, LogOut, Edit, Trash2, Download,
-  Shield, Key, Settings, Database, Activity,
-  AlertTriangle, CheckCircle, XCircle, Plus, Search,
+  LayoutDashboard, Users, LogOut,
+  Shield, Settings, Database,
+  AlertTriangle, CheckCircle, XCircle, Search,
   ChevronDown, Crown, UserCheck, UserMinus, Bell,
-  Server, Clock, BarChart3, RefreshCw, UserCog, Store, Package, Truck, ShoppingCart
+  RefreshCw, UserCog, Store, Truck, ShoppingCart, Trash2
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
 import { Switch } from '../../components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -162,9 +159,98 @@ const SecurityComponent = ({ maintenanceMode, onToggleMaintenance, showToast }: 
   </div>
 );
 
-// ── User Management Component ─────────────────────────────────────────────────
-const UserManagementComponent = ({ users, loading, onApprove, onReject, searchTerm, setSearchTerm, roleFilter, setRoleFilter, showToast }: any) => {
-  const [expandedReportId, setExpandedReportId] = useState<number | null>(null);
+// ── KYC Summary Card — clean, no raw JSON ─────────────────────────────────
+const KYCSummary = ({ user }: { user: any }) => {
+  const score = user?.kyc_score;
+  const decision = user?.kyc_decision;
+
+  let report: any = null;
+  try { report = user?.classification_report ? JSON.parse(user.classification_report) : null; } catch {}
+
+  const docValid = report?.document_validated ?? false;
+  const authScore = report?.authenticity_score ?? 0;
+  const selfieValid = report?.validation_details?.selfie?.is_valid ?? false;
+  const idValid = report?.validation_details?.id?.is_valid ?? false;
+  const redFlags = (report?.red_flags || []).filter((f: string) => !f.includes(':'));
+  const verdict = report?.final_verdict?.replace(/[✓✗]/g, '').trim() || '—';
+
+  const overallOk = docValid && selfieValid && idValid && (score ?? 0) >= 0.9;
+  const overallWarn = !overallOk && (score ?? 0) >= 0.8;
+
+  return (
+    <div className="space-y-3">
+      {/* Overall verdict banner */}
+      <div className={`flex items-center gap-3 p-3 rounded-xl ${
+        overallOk ? 'bg-green-50 border border-green-200' :
+        overallWarn ? 'bg-yellow-50 border border-yellow-200' :
+        'bg-red-50 border border-red-200'
+      }`}>
+        {overallOk
+          ? <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
+          : overallWarn
+          ? <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0" />
+          : <XCircle className="w-5 h-5 text-red-600 shrink-0" />}
+        <div>
+          <p className={`font-semibold text-sm ${overallOk ? 'text-green-800' : overallWarn ? 'text-yellow-800' : 'text-red-800'}`}>
+            {overallOk ? 'Identity Verified' : overallWarn ? 'Requires Manual Review' : 'Verification Failed'}
+          </p>
+          <p className={`text-xs mt-0.5 ${overallOk ? 'text-green-700' : overallWarn ? 'text-yellow-700' : 'text-red-700'}`}>
+            {overallOk
+              ? 'Document and selfie checks passed. Safe to approve.'
+              : overallWarn
+              ? 'Some checks have lower confidence. Review documents before approving.'
+              : 'One or more verification checks failed. Review carefully.'}
+          </p>
+        </div>
+      </div>
+
+      {/* Score grid */}
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { label: 'Identity Score', value: score != null ? `${(score * 100).toFixed(0)}%` : '—', ok: (score ?? 0) >= 0.9 },
+          { label: 'Document Auth', value: `${authScore}%`, ok: authScore >= 80 },
+          { label: 'Decision', value: decision ? (decision === 'REAL' ? 'Genuine' : 'Suspicious') : '—', ok: decision === 'REAL' },
+        ].map(item => (
+          <div key={item.label} className="bg-gray-50 border rounded-lg p-2 text-center">
+            <p className="text-xs text-gray-500 mb-1">{item.label}</p>
+            <p className={`font-bold text-sm ${item.ok ? 'text-green-700' : 'text-red-600'}`}>{item.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Document checks */}
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { label: 'Selfie', ok: selfieValid },
+          { label: 'ID Document', ok: idValid },
+          { label: 'Document Validated', ok: docValid },
+        ].map(item => (
+          <div key={item.label} className="flex items-center gap-2 px-3 py-2 bg-gray-50 border rounded-lg">
+            {item.ok
+              ? <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+              : <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
+            <span className="text-xs text-gray-700">{item.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Red flags — only if any */}
+      {redFlags.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {redFlags.map((flag: string, i: number) => (
+            <span key={i} className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">{flag}</span>
+          ))}
+        </div>
+      )}
+
+      {/* Verdict note */}
+      {verdict !== '—' && (
+        <p className="text-xs text-gray-500 bg-gray-50 border rounded-lg p-2">{verdict}</p>
+      )}
+    </div>
+  );
+};
+const UserManagementComponent = ({ users, loading, onApprove, onReject, searchTerm, setSearchTerm, roleFilter, setRoleFilter }: any) => {
   const filtered = users.filter((u: any) => {
     const matchSearch = u.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         u.user?.email?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -201,140 +287,60 @@ const UserManagementComponent = ({ users, loading, onApprove, onReject, searchTe
               <p>No pending approvals.</p>
             </div>
           ) : (
-            <div className="grid gap-4">
+            <div className="grid gap-6">
               {filtered.map((req: any) => (
                 <Card key={req.id} className="border-gray-200 shadow-sm">
-                  <CardHeader className="flex justify-between items-start gap-4 flex-wrap">
+                  <CardContent className="p-5 space-y-4">
+
+                    {/* Header — name, role, status, date */}
+                    <div className="flex justify-between items-start flex-wrap gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">{req.user?.name}</h3>
+                        <p className="text-sm text-gray-500">{req.user?.email}</p>
+                        <div className="flex gap-2 mt-2 flex-wrap">
+                          <Badge className="bg-blue-100 text-blue-700 border-0 capitalize">{req.role}</Badge>
+                          <Badge className={
+                            req.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700 border-0' :
+                            req.status === 'APPROVED' ? 'bg-green-100 text-green-700 border-0' :
+                            'bg-red-100 text-red-700 border-0'
+                          }>{req.status}</Badge>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Applied: {req.created_at ? new Date(req.created_at).toLocaleString() : '--'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* ID photos */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="border rounded-xl overflow-hidden">
+                        <p className="text-xs font-medium px-3 py-1.5 bg-gray-50 text-gray-600">Selfie</p>
+                        {req.user?.profile_image
+                          ? <img src={req.user.profile_image} alt="Selfie" className="w-full h-40 object-cover" />
+                          : <div className="h-40 flex items-center justify-center text-gray-400 text-sm bg-gray-50">Not provided</div>}
+                      </div>
+                      <div className="border rounded-xl overflow-hidden">
+                        <p className="text-xs font-medium px-3 py-1.5 bg-gray-50 text-gray-600">ID Document</p>
+                        {req.user?.id_document
+                          ? <img src={req.user.id_document} alt="ID Document" className="w-full h-40 object-cover" />
+                          : <div className="h-40 flex items-center justify-center text-gray-400 text-sm bg-gray-50">Not provided</div>}
+                      </div>
+                    </div>
+
+                    {/* KYC Summary — clean, no raw JSON */}
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{req.user?.name}</h3>
-                      <p className="text-sm text-gray-500">{req.user?.email}</p>
-                      <div className="mt-2 flex gap-2 items-center flex-wrap">
-                        <Badge className="bg-blue-100 text-blue-700 border-0 capitalize">{req.role}</Badge>
-                        <Badge className={req.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700 border-0' : req.status === 'APPROVED' ? 'bg-green-100 text-green-700 border-0' : 'bg-red-100 text-red-700 border-0'}>
-                          {req.status}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-1">Requested: {req.created_at ? new Date(req.created_at).toLocaleString() : '--'}</p>
-                    </div>
-                    <div className="text-right">
-                      {req.user?.kyc_score !== null && req.user?.kyc_score !== undefined && (
-                        <div className="text-right">
-                          <p className="text-sm font-semibold">KYC Score: <span className="text-indigo-600">{req.user.kyc_score.toFixed(3)}</span></p>
-                          <p className="text-xs text-gray-500">Decision: <span className="font-semibold">{req.user.kyc_decision.toLowerCase()}</span></p>
-                        </div>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-4 space-y-4">
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="border rounded-lg overflow-hidden">
-                        <p className="text-xs font-medium px-2 py-1 bg-gray-100">Captured Selfie / Profile</p>
-                        {req.user?.profile_image ? 
-                          <img src={req.user.profile_image} alt="Selfie" className="w-full h-40 object-cover" /> :
-                          <div className="h-40 flex items-center justify-center bg-slate-50 text-gray-400">No image</div>
-                        }
-                      </div>
-                      <div className="border rounded-lg overflow-hidden">
-                        <p className="text-xs font-medium px-2 py-1 bg-gray-100">ID Document</p>
-                        {req.user?.id_document ? 
-                          <img src={req.user.id_document} alt="ID Document" className="w-full h-40 object-cover" /> :
-                          <div className="h-40 flex items-center justify-center bg-slate-50 text-gray-400">No ID</div>
-                        }
-                      </div>
+                      <p className="text-sm font-semibold text-gray-700 mb-2">KYC Verification</p>
+                      <KYCSummary user={req.user} />
                     </div>
 
-                    <div className="rounded-lg border p-4 bg-gray-50 max-h-96 overflow-y-auto">
-                      <h4 className="text-sm font-semibold text-gray-800 mb-2">KYC Verification Report</h4>
-                      <p className="text-xs text-gray-500 mb-2">A deterministic score-based conclusion (not vague "match status").</p>
-                      <div className="bg-white p-3 rounded border border-gray-200 text-xs text-gray-700 whitespace-pre-wrap break-words font-mono">
-                        {req.user?.kyc_report || 'No report available.'}
-                      </div>
-                    </div>
-
-                    {req.user?.classification_report && (
-                      <div className="rounded-lg border p-4 bg-blue-50 border-blue-200">
-                        {/* Document and Role Verification Block */}
-                        <div className="mb-3 p-2 rounded bg-white border border-blue-100">
-                          {(() => {
-                            try {
-                              const report = JSON.parse(req.user.classification_report);
-                              const isValid = report.document_validated;
-                              const authScore = report.authenticity_score ?? 0;
-
-                              return (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm font-bold">Document Verification Status</span>
-                                  <span className={`text-xs px-2 py-1 rounded font-bold ${
-                                    isValid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                  }`}>
-                                    {isValid ? '✓ AUTHENTIC' : '✗ FAILED'} ({authScore}%)
-                                  </span>
-                                </div>
-                              );
-                            } catch {
-                              return <div className="text-xs text-red-600">Unable to parse classification report.</div>;
-                            }
-                          })()}
-                        </div>
-
-                        <div className="text-xs text-blue-800 font-semibold mb-2">Role: {req.user?.role_classification || 'Inconclusive'} ({req.user?.classification_confidence ?? 0}%)</div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2 text-xs">
-                          {(() => {
-                            try {
-                              const report = JSON.parse(req.user.classification_report);
-                              return [
-                                ['Final Verdict', report.final_verdict],
-                                ['Red Flags', (report.red_flags || []).join(', ') || 'None'],
-                                ['Evidence', (report.evidence_found || []).join(', ') || 'None'],
-                                ['Selfie Valid', report.validation_details?.selfie?.is_valid ? 'Yes' : 'No'],
-                                ['ID Valid', report.validation_details?.id?.is_valid ? 'Yes' : 'No'],
-                                ['ID Valid Details', report.validation_details?.id?.details || 'N/A'],
-                              ].map(([label, value], idx) => (
-                                <div key={idx} className="rounded p-2 bg-blue-100 text-blue-900">
-                                  <span className="font-bold">{label}: </span>{value || 'N/A'}
-                                </div>
-                              ));
-                            } catch {
-                              return <div className="text-xs text-gray-500">Cannot render parsed report data.</div>;
-                            }
-                          })()}
-                        </div>
-
-                        <div className="p-3 rounded bg-white border border-blue-200 text-xs font-mono overflow-x-auto">
-                          <div className="font-bold text-blue-800 mb-1">Complete report JSON (for debugging):</div>
-                          <pre className="whitespace-pre-wrap break-words">{req.user?.classification_report}</pre>
-                        </div>
-
-                        {req.user?.classification_evidence && (
-                          <div className="mt-3">
-                            <h5 className="text-xs font-bold text-blue-900 mb-2">🔎 Evidence Tags:</h5>
-                            <div className="flex flex-wrap gap-2">
-                              {(() => {
-                                try {
-                                  const evidence = JSON.parse(req.user.classification_evidence);
-                                  return evidence.map((item: string, idx: number) => (
-                                    <span key={idx} className="text-xs bg-blue-200 text-blue-900 px-2 py-1 rounded">
-                                      {item}
-                                    </span>
-                                  ));
-                                } catch {
-                                  return <span className="text-xs text-gray-500">Invalid evidence data</span>;
-                                }
-                              })()}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
+                    {/* Action buttons */}
                     {req.status === 'PENDING' && (
-                      <div className="flex gap-2">
-                        <Button size="sm" className="bg-green-600 text-white" onClick={() => onApprove(req.user?.id, req.user?.name)}>
-                          <UserCheck className="w-3 h-3 mr-1" /> Approve
+                      <div className="flex gap-3 pt-1">
+                        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white flex-1" onClick={() => onApprove(req.user?.id, req.user?.name)}>
+                          <UserCheck className="w-4 h-4 mr-1" /> Approve
                         </Button>
-                        <Button size="sm" variant="outline" className="text-red-600 border-red-200" onClick={() => onReject(req.user?.id, req.user?.name)}>
-                          <UserMinus className="w-3 h-3 mr-1" /> Reject
+                        <Button size="sm" variant="outline" className="text-red-600 border-red-300 hover:bg-red-50 flex-1" onClick={() => onReject(req.user?.id, req.user?.name)}>
+                          <UserMinus className="w-4 h-4 mr-1" /> Reject
                         </Button>
                       </div>
                     )}
@@ -368,17 +374,6 @@ const DataManagementComponent = ({ showToast }: any) => {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-900">Data Management</h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { label: 'Export Users (CSV)', icon: Download },
-          { label: 'Export Orders (CSV)', icon: Download },
-          { label: 'Export Products (CSV)', icon: Download },
-        ].map(item => (
-          <Button key={item.label} variant="outline" className="w-full" onClick={() => showToast(`${item.label} started`, 'info')}>
-            <item.icon className="w-4 h-4 mr-2" />{item.label}
-          </Button>
-        ))}
-      </div>
 
       <Card className="border-red-200 bg-red-50">
         <CardHeader>
@@ -423,8 +418,6 @@ export default function AdminDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [maintenanceMode, setMaintenanceMode] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const showToast = (message: string, type: Toast['type'] = 'success') =>
     setToasts(prev => [...prev, { id: Date.now(), message, type }]);

@@ -47,32 +47,64 @@ const UI = {
 // ── FAQ knowledge base per language ──────────────────────────────────────────
 const KB: Record<Lang, Array<{ patterns: string[]; answer: string }>> = {
   english: [
-    { patterns: ['order', 'track', 'delivery', 'status'], answer: 'You can track your order in the Orders section of your dashboard. Click "Track Order" on any active order to see live location.' },
-    { patterns: ['vendor', 'product', 'wholesale', 'buy'], answer: 'Vendors list wholesale products. As a shopkeeper, browse them and send a purchase request. The vendor will approve or reject it.' },
-    { patterns: ['request', 'approve', 'reject', 'pending'], answer: 'After you send a purchase request, the vendor reviews it. Once approved, set your selling price to activate the product in your shop.' },
-    { patterns: ['price', 'selling', 'set price'], answer: 'After vendor approval, go to your Requests tab and enter your selling price. It must be higher than the wholesale price.' },
-    { patterns: ['notification', 'alert', 'notify'], answer: 'Notifications appear in the bell icon at the top. Vendors get notified of new requests; shopkeepers get notified of approvals/rejections.' },
-    { patterns: ['login', 'register', 'account', 'password'], answer: 'Use your email and password to log in. Forgot your password? Click "Forgot Password" on the login page.' },
-    { patterns: ['cart', 'checkout', 'payment'], answer: 'Add products to your cart and proceed to checkout. We support multiple payment methods.' },
-    { patterns: ['map', 'location', 'gps'], answer: 'The delivery dashboard shows a live map with your real-time location and delivery stops using OpenStreetMap.' },
-    { patterns: ['hello', 'hi', 'hey', 'namaste'], answer: "Hello! 😊 I'm Mitra, your HomeCart assistant. Ask me anything about orders, products, vendors, or your account!" },
-    { patterns: ['thank', 'thanks', 'bye', 'goodbye'], answer: "You're welcome! Have a great day 🙏 Feel free to ask anytime." },
+    { patterns: ['order', 'track', 'delivery', 'status', 'where is my', 'shipped', 'dispatch'], answer: 'You can track your order in the Orders section of your dashboard. Click "Track Order" on any active order to see live location.' },
+    { patterns: ['vendor', 'wholesale', 'supplier', 'bulk'], answer: 'Vendors list wholesale products. As a shopkeeper, browse them and send a purchase request. The vendor will approve or reject it.' },
+    { patterns: ['product', 'item', 'stock', 'inventory', 'catalogue', 'catalog', 'listing'], answer: 'Browse products in the Products section. Vendors manage their inventory there. Shopkeepers can add vendor products to their shop after approval.' },
+    { patterns: ['request', 'approve', 'reject', 'pending', 'purchase request'], answer: 'After you send a purchase request, the vendor reviews it. Once approved, set your selling price to activate the product in your shop.' },
+    { patterns: ['price', 'selling', 'set price', 'cost', 'how much', 'rate', 'margin'], answer: 'After vendor approval, go to your Requests tab and enter your selling price. It must be higher than the wholesale price.' },
+    { patterns: ['notification', 'alert', 'notify', 'bell', 'update'], answer: 'Notifications appear in the bell icon at the top. Vendors get notified of new requests; shopkeepers get notified of approvals/rejections.' },
+    { patterns: ['login', 'sign in', 'signin', 'log in'], answer: 'Use your email and password to log in. Click "Sign In" on the homepage and select your role.' },
+    { patterns: ['register', 'sign up', 'signup', 'create account', 'new account'], answer: 'Click "Register" on the homepage, fill in your details, select your role (customer, vendor, shopkeeper, or delivery), and submit.' },
+    { patterns: ['password', 'forgot', 'reset', 'change password'], answer: 'Click "Forgot Password" on the login page to reset your password via email.' },
+    { patterns: ['cart', 'basket', 'add to cart'], answer: 'Click "Add to Cart" on any product. View your cart from the dashboard to review items before checkout.' },
+    { patterns: ['checkout', 'payment', 'pay', 'buy now', 'place order', 'purchase'], answer: 'Go to your cart and click Checkout. Enter your delivery address and choose a payment method to place your order.' },
+    { patterns: ['map', 'location', 'gps', 'live', 'real time', 'realtime'], answer: 'The delivery dashboard shows a live map with real-time location and delivery stops using OpenStreetMap.' },
+    { patterns: ['delivery agent', 'rider', 'driver', 'agent'], answer: 'Delivery agents see their assigned orders on the Delivery Dashboard with a live map. They can update delivery status in real time.' },
+    { patterns: ['shopkeeper', 'shop', 'retailer', 'store'], answer: 'Shopkeepers can browse vendor products, send purchase requests, set selling prices, and manage their own store inventory.' },
+    { patterns: ['customer', 'buyer', 'shopper'], answer: 'Customers can browse products, add to cart, place orders, and track deliveries from their dashboard.' },
+    { patterns: ['admin', 'approve user', 'pending user', 'user approval'], answer: 'Admins can approve or reject new user registrations from the Pending Approvals section in the Admin Dashboard.' },
+    { patterns: ['role', 'type', 'who am i', 'what role'], answer: 'HomeCart has 4 roles: Customer (buys products), Vendor (sells wholesale), Shopkeeper (retails vendor products), and Delivery Agent.' },
+    { patterns: ['review', 'rating', 'feedback', 'comment'], answer: 'After receiving a delivered order, you can leave a review and rating for the product from your Orders section.' },
+    { patterns: ['billing', 'invoice', 'receipt', 'payment history'], answer: 'View your billing history and invoices in the Billing section of your dashboard.' },
+    { patterns: ['cancel', 'return', 'refund'], answer: 'To cancel an order, go to your Orders section and click Cancel on an eligible order. Refunds are processed within 3-5 business days.' },
+    { patterns: ['what is homecart', 'about', 'platform', 'app', 'website', 'homecart'], answer: 'HomeCart is a local vendors marketplace connecting customers, vendors, shopkeepers, and delivery agents in one platform.' },
+    { patterns: ['help', 'support', 'assist', 'problem', 'issue', 'trouble', 'not working'], answer: "I'm here to help! You can ask me about orders, products, vendors, payments, delivery, or your account. What's the issue?" },
+    { patterns: ['hello', 'hi', 'hey', 'namaste', 'good morning', 'good evening', 'howdy'], answer: "Hello! 😊 I'm Mitra, your HomeCart assistant. Ask me anything about orders, products, vendors, or your account!" },
+    { patterns: ['thank', 'thanks', 'bye', 'goodbye', 'see you', 'great', 'awesome', 'perfect'], answer: "You're welcome! Have a great day 🙏 Feel free to ask anytime." },
   ],
   hindi: [
-    { patterns: ['ऑर्डर', 'ट्रैक', 'डिलीवरी', 'स्थिति'], answer: 'आप अपने डैशबोर्ड के ऑर्डर सेक्शन में अपना ऑर्डर ट्रैक कर सकते हैं। किसी भी सक्रिय ऑर्डर पर "ट्रैक ऑर्डर" पर क्लिक करें।' },
-    { patterns: ['विक्रेता', 'उत्पाद', 'थोक', 'खरीद'], answer: 'विक्रेता थोक उत्पाद सूचीबद्ध करते हैं। दुकानदार के रूप में, उन्हें ब्राउज़ करें और खरीद अनुरोध भेजें।' },
-    { patterns: ['अनुरोध', 'स्वीकृत', 'अस्वीकृत', 'लंबित'], answer: 'अनुरोध भेजने के बाद, विक्रेता इसकी समीक्षा करता है। स्वीकृत होने पर, अपनी बिक्री मूल्य निर्धारित करें।' },
-    { patterns: ['मूल्य', 'कीमत', 'बिक्री'], answer: 'विक्रेता की स्वीकृति के बाद, अनुरोध टैब में जाएं और अपनी बिक्री कीमत दर्ज करें।' },
-    { patterns: ['सूचना', 'अलर्ट', 'नोटिफिकेशन'], answer: 'सूचनाएं शीर्ष पर बेल आइकन में दिखाई देती हैं।' },
-    { patterns: ['नमस्ते', 'हेलो', 'हाय'], answer: 'नमस्ते! 😊 मैं मित्र हूँ। ऑर्डर, उत्पाद, या खाते के बारे में कुछ भी पूछें!' },
-    { patterns: ['धन्यवाद', 'शुक्रिया', 'अलविदा'], answer: 'आपका स्वागत है! आपका दिन शुभ हो 🙏' },  ],
+    { patterns: ['ऑर्डर', 'ट्रैक', 'डिलीवरी', 'स्थिति', 'कहाँ है', 'भेजा'], answer: 'आप अपने डैशबोर्ड के ऑर्डर सेक्शन में अपना ऑर्डर ट्रैक कर सकते हैं। किसी भी सक्रिय ऑर्डर पर "ट्रैक ऑर्डर" पर क्लिक करें।' },
+    { patterns: ['विक्रेता', 'थोक', 'सप्लायर', 'vendor'], answer: 'विक्रेता थोक उत्पाद सूचीबद्ध करते हैं। दुकानदार के रूप में, उन्हें ब्राउज़ करें और खरीद अनुरोध भेजें।' },
+    { patterns: ['उत्पाद', 'प्रोडक्ट', 'सामान', 'स्टॉक', 'product'], answer: 'उत्पाद सेक्शन में उत्पाद ब्राउज़ करें। विक्रेता अपनी इन्वेंटरी वहाँ प्रबंधित करते हैं।' },
+    { patterns: ['अनुरोध', 'स्वीकृत', 'अस्वीकृत', 'लंबित', 'request'], answer: 'अनुरोध भेजने के बाद, विक्रेता इसकी समीक्षा करता है। स्वीकृत होने पर, अपनी बिक्री मूल्य निर्धारित करें।' },
+    { patterns: ['मूल्य', 'कीमत', 'बिक्री', 'price', 'दाम', 'कितना'], answer: 'विक्रेता की स्वीकृति के बाद, अनुरोध टैब में जाएं और अपनी बिक्री कीमत दर्ज करें।' },
+    { patterns: ['सूचना', 'अलर्ट', 'नोटिफिकेशन', 'notification'], answer: 'सूचनाएं शीर्ष पर बेल आइकन में दिखाई देती हैं।' },
+    { patterns: ['लॉगिन', 'साइन इन', 'login', 'sign in'], answer: 'अपने ईमेल और पासवर्ड से लॉगिन करें। होमपेज पर "साइन इन" पर क्लिक करें।' },
+    { patterns: ['रजिस्टर', 'खाता', 'register', 'account', 'नया खाता', 'sign up'], answer: 'होमपेज पर "रजिस्टर" पर क्लिक करें, अपनी जानकारी भरें और अपनी भूमिका चुनें।' },
+    { patterns: ['पासवर्ड', 'भूल गया', 'password', 'reset'], answer: 'लॉगिन पेज पर "पासवर्ड भूल गए" पर क्लिक करें।' },
+    { patterns: ['कार्ट', 'cart', 'टोकरी', 'add', 'जोड़ें'], answer: 'किसी भी उत्पाद पर "कार्ट में जोड़ें" पर क्लिक करें।' },
+    { patterns: ['भुगतान', 'payment', 'checkout', 'खरीदें', 'pay', 'ऑर्डर दें'], answer: 'कार्ट में जाएं और चेकआउट पर क्लिक करें। डिलीवरी पता और भुगतान विधि चुनें।' },
+    { patterns: ['रद्द', 'वापसी', 'रिफंड', 'cancel', 'return', 'refund'], answer: 'ऑर्डर रद्द करने के लिए, ऑर्डर सेक्शन में जाएं और रद्द करें पर क्लिक करें।' },
+    { patterns: ['मदद', 'help', 'सहायता', 'समस्या', 'problem', 'issue'], answer: 'मैं यहाँ मदद के लिए हूँ! ऑर्डर, उत्पाद, भुगतान, या खाते के बारे में पूछें।' },
+    { patterns: ['नमस्ते', 'हेलो', 'हाय', 'hello', 'hi', 'good morning'], answer: 'नमस्ते! 😊 मैं मित्र हूँ। ऑर्डर, उत्पाद, या खाते के बारे में कुछ भी पूछें!' },
+    { patterns: ['धन्यवाद', 'शुक्रिया', 'अलविदा', 'thanks', 'bye'], answer: 'आपका स्वागत है! आपका दिन शुभ हो 🙏' },
+  ],
   kannada: [
-    { patterns: ['ಆರ್ಡರ್', 'ಟ್ರ್ಯಾಕ್', 'ಡೆಲಿವರಿ', 'ಸ್ಥಿತಿ'], answer: 'ನಿಮ್ಮ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್‌ನ ಆರ್ಡರ್ ವಿಭಾಗದಲ್ಲಿ ನಿಮ್ಮ ಆರ್ಡರ್ ಟ್ರ್ಯಾಕ್ ಮಾಡಬಹುದು।' },
-    { patterns: ['ವಿಕ್ರೇತ', 'ಉತ್ಪನ್ನ', 'ಸಗಟು', 'ಖರೀದಿ'], answer: 'ವಿಕ್ರೇತರು ಸಗಟು ಉತ್ಪನ್ನಗಳನ್ನು ಪಟ್ಟಿ ಮಾಡುತ್ತಾರೆ. ಅಂಗಡಿಕಾರರಾಗಿ, ಅವುಗಳನ್ನು ಬ್ರೌಸ್ ಮಾಡಿ ಮತ್ತು ಖರೀದಿ ವಿನಂತಿ ಕಳುಹಿಸಿ।' },
-    { patterns: ['ವಿನಂತಿ', 'ಅನುಮೋದನೆ', 'ತಿರಸ್ಕಾರ', 'ಬಾಕಿ'], answer: 'ವಿನಂತಿ ಕಳುಹಿಸಿದ ನಂತರ, ವಿಕ್ರೇತ ಅದನ್ನು ಪರಿಶೀಲಿಸುತ್ತಾರೆ. ಅನುಮೋದಿಸಿದ ನಂತರ, ನಿಮ್ಮ ಮಾರಾಟ ಬೆಲೆ ನಿಗದಿಪಡಿಸಿ।' },
-    { patterns: ['ಬೆಲೆ', 'ಮಾರಾಟ', 'ಬೆಲೆ ನಿಗದಿ'], answer: 'ವಿಕ್ರೇತ ಅನುಮೋದನೆಯ ನಂತರ, ವಿನಂತಿ ಟ್ಯಾಬ್‌ಗೆ ಹೋಗಿ ಮತ್ತು ನಿಮ್ಮ ಮಾರಾಟ ಬೆಲೆ ನಮೂದಿಸಿ।' },
-    { patterns: ['ನಮಸ್ಕಾರ', 'ಹಲೋ', 'ಹಾಯ್'], answer: 'ನಮಸ್ಕಾರ! 😊 ನಾನು ಮಿತ್ರ. ಆರ್ಡರ್, ಉತ್ಪನ್ನ, ಅಥವಾ ಖಾತೆಯ ಬಗ್ಗೆ ಏನಾದರೂ ಕೇಳಿ!' },
-    { patterns: ['ಧನ್ಯವಾದ', 'ಬಾಯ್', 'ಅಲ್ವಿದಾ'], answer: 'ಸ್ವಾಗತ! ನಿಮ್ಮ ದಿನ ಶುಭವಾಗಲಿ 🙏' },
+    { patterns: ['ಆರ್ಡರ್', 'ಟ್ರ್ಯಾಕ್', 'ಡೆಲಿವರಿ', 'ಸ್ಥಿತಿ', 'order', 'track'], answer: 'ನಿಮ್ಮ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್‌ನ ಆರ್ಡರ್ ವಿಭಾಗದಲ್ಲಿ ನಿಮ್ಮ ಆರ್ಡರ್ ಟ್ರ್ಯಾಕ್ ಮಾಡಬಹುದು।' },
+    { patterns: ['ವಿಕ್ರೇತ', 'ಸಗಟು', 'vendor', 'wholesale'], answer: 'ವಿಕ್ರೇತರು ಸಗಟು ಉತ್ಪನ್ನಗಳನ್ನು ಪಟ್ಟಿ ಮಾಡುತ್ತಾರೆ. ಅಂಗಡಿಕಾರರಾಗಿ, ಅವುಗಳನ್ನು ಬ್ರೌಸ್ ಮಾಡಿ ಮತ್ತು ಖರೀದಿ ವಿನಂತಿ ಕಳುಹಿಸಿ।' },
+    { patterns: ['ಉತ್ಪನ್ನ', 'ಸಾಮಾನು', 'product', 'item', 'stock'], answer: 'ಉತ್ಪನ್ನ ವಿಭಾಗದಲ್ಲಿ ಉತ್ಪನ್ನಗಳನ್ನು ಬ್ರೌಸ್ ಮಾಡಿ।' },
+    { patterns: ['ವಿನಂತಿ', 'ಅನುಮೋದನೆ', 'ತಿರಸ್ಕಾರ', 'ಬಾಕಿ', 'request'], answer: 'ವಿನಂತಿ ಕಳುಹಿಸಿದ ನಂತರ, ವಿಕ್ರೇತ ಅದನ್ನು ಪರಿಶೀಲಿಸುತ್ತಾರೆ. ಅನುಮೋದಿಸಿದ ನಂತರ, ನಿಮ್ಮ ಮಾರಾಟ ಬೆಲೆ ನಿಗದಿಪಡಿಸಿ।' },
+    { patterns: ['ಬೆಲೆ', 'ಮಾರಾಟ', 'price', 'cost', 'rate', 'ಎಷ್ಟು'], answer: 'ವಿಕ್ರೇತ ಅನುಮೋದನೆಯ ನಂತರ, ವಿನಂತಿ ಟ್ಯಾಬ್‌ಗೆ ಹೋಗಿ ಮತ್ತು ನಿಮ್ಮ ಮಾರಾಟ ಬೆಲೆ ನಮೂದಿಸಿ।' },
+    { patterns: ['ಸೂಚನೆ', 'ಅಲರ್ಟ್', 'notification', 'bell'], answer: 'ಸೂಚನೆಗಳು ಮೇಲ್ಭಾಗದ ಬೆಲ್ ಐಕಾನ್‌ನಲ್ಲಿ ಕಾಣಿಸುತ್ತವೆ।' },
+    { patterns: ['ಲಾಗಿನ್', 'ಸೈನ್ ಇನ್', 'login', 'sign in'], answer: 'ನಿಮ್ಮ ಇಮೇಲ್ ಮತ್ತು ಪಾಸ್‌ವರ್ಡ್ ಬಳಸಿ ಲಾಗಿನ್ ಮಾಡಿ।' },
+    { patterns: ['ನೋಂದಣಿ', 'register', 'account', 'ಖಾತೆ', 'sign up'], answer: 'ಹೋಮ್‌ಪೇಜ್‌ನಲ್ಲಿ "ರಿಜಿಸ್ಟರ್" ಕ್ಲಿಕ್ ಮಾಡಿ, ವಿವರಗಳನ್ನು ಭರ್ತಿ ಮಾಡಿ ಮತ್ತು ನಿಮ್ಮ ಪಾತ್ರ ಆಯ್ಕೆ ಮಾಡಿ।' },
+    { patterns: ['ಪಾಸ್‌ವರ್ಡ್', 'password', 'reset', 'ಮರೆತಿದ್ದೇನೆ'], answer: 'ಲಾಗಿನ್ ಪೇಜ್‌ನಲ್ಲಿ "ಪಾಸ್‌ವರ್ಡ್ ಮರೆತಿದ್ದೇನೆ" ಕ್ಲಿಕ್ ಮಾಡಿ।' },
+    { patterns: ['ಕಾರ್ಟ್', 'cart', 'ಬುಟ್ಟಿ', 'add', 'ಸೇರಿಸಿ'], answer: 'ಯಾವುದೇ ಉತ್ಪನ್ನದ ಮೇಲೆ "ಕಾರ್ಟ್‌ಗೆ ಸೇರಿಸಿ" ಕ್ಲಿಕ್ ಮಾಡಿ।' },
+    { patterns: ['ಪಾವತಿ', 'payment', 'checkout', 'pay', 'ಖರೀದಿ', 'ಆರ್ಡರ್ ಮಾಡಿ'], answer: 'ಕಾರ್ಟ್‌ಗೆ ಹೋಗಿ ಮತ್ತು ಚೆಕ್‌ಔಟ್ ಕ್ಲಿಕ್ ಮಾಡಿ. ವಿತರಣಾ ವಿಳಾಸ ಮತ್ತು ಪಾವತಿ ವಿಧಾನ ಆಯ್ಕೆ ಮಾಡಿ।' },
+    { patterns: ['ರದ್ದು', 'ವಾಪಸ್', 'ರಿಫಂಡ್', 'cancel', 'return', 'refund'], answer: 'ಆರ್ಡರ್ ರದ್ದು ಮಾಡಲು, ಆರ್ಡರ್ ವಿಭಾಗಕ್ಕೆ ಹೋಗಿ ಮತ್ತು ರದ್ದು ಮಾಡಿ ಕ್ಲಿಕ್ ಮಾಡಿ।' },
+    { patterns: ['ಸಹಾಯ', 'help', 'ಸಮಸ್ಯೆ', 'problem', 'issue'], answer: 'ನಾನು ಸಹಾಯ ಮಾಡಲು ಇಲ್ಲಿದ್ದೇನೆ! ಆರ್ಡರ್, ಉತ್ಪನ್ನ, ಪಾವತಿ, ಅಥವಾ ಖಾತೆಯ ಬಗ್ಗೆ ಕೇಳಿ।' },
+    { patterns: ['ನಮಸ್ಕಾರ', 'ಹಲೋ', 'ಹಾಯ್', 'hello', 'hi', 'good morning'], answer: 'ನಮಸ್ಕಾರ! 😊 ನಾನು ಮಿತ್ರ. ಆರ್ಡರ್, ಉತ್ಪನ್ನ, ಅಥವಾ ಖಾತೆಯ ಬಗ್ಗೆ ಏನಾದರೂ ಕೇಳಿ!' },
+    { patterns: ['ಧನ್ಯವಾದ', 'ಬಾಯ್', 'ಅಲ್ವಿದಾ', 'thanks', 'bye'], answer: 'ಸ್ವಾಗತ! ನಿಮ್ಮ ದಿನ ಶುಭವಾಗಲಿ 🙏' },
   ],
 };
 
@@ -83,14 +115,17 @@ const fallback: Record<Lang, string> = {
 };
 
 function getAnswer(input: string, lang: Lang): string {
-  const lower = input.toLowerCase();
+  const lower = input.toLowerCase().trim();
+  if (!lower) return fallback[lang];
+
+  // Check current language KB first
   for (const entry of KB[lang]) {
-    if (entry.patterns.some(p => lower.includes(p))) return entry.answer;
+    if (entry.patterns.some(p => lower.includes(p.toLowerCase()))) return entry.answer;
   }
-  // Also try English KB as fallback for non-English input
+  // Always fall back to English KB — handles English words typed in any language mode
   if (lang !== 'english') {
     for (const entry of KB.english) {
-      if (entry.patterns.some(p => lower.includes(p))) return entry.answer;
+      if (entry.patterns.some(p => lower.includes(p.toLowerCase()))) return entry.answer;
     }
   }
   return fallback[lang];

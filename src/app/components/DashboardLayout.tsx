@@ -1,9 +1,9 @@
-import { ReactNode, useState, useEffect, useRef } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ShoppingBag, Menu, Bell, User, LogOut, Search, Play, X, ChevronRight, Sparkles, Star, Zap, Settings, HelpCircle, Moon, Sun, Volume2, VolumeX, Info, Globe, ChevronDown } from 'lucide-react';
+import { ShoppingBag, Menu, X, ChevronRight, Info, Globe, ChevronDown } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react';
+import NotificationBell from './NotificationBell';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -310,17 +310,16 @@ const KnowMoreModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
   );
 };
 
-export default function DashboardLayout({ 
-  children, 
-  title, 
-  role, 
+export default function DashboardLayout({
+  children,
+  title,
+  role,
   sidebarItems
 }: DashboardLayoutProps) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showKnowMore, setShowKnowMore] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [searchFocused, setSearchFocused] = useState(false);
 
   // Handle scroll effect
   useEffect(() => {
@@ -334,18 +333,12 @@ export default function DashboardLayout({
 
 
 
-  const handleLogout = () => {
-    if (window.confirm('Are you sure you want to logout?')) {
-      navigate('/');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-cyan-50 relative">
       {/* Background Elements */}
       <FloatingParticles />
       <AnimatedOrb />
-      
+
       {/* Static grid background */}
       <div className="fixed inset-0 pointer-events-none opacity-5">
         <div className="absolute inset-0" style={{
@@ -382,31 +375,14 @@ export default function DashboardLayout({
             </Link>
           </div>
 
-          {/* Search Bar */}
-          <div className="hidden md:flex flex-1 max-w-md mx-8">
-            <motion.div 
-              className="relative w-full"
-              animate={{ scale: searchFocused ? 1.02 : 1 }}
-            >
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <Input
-                type="search"
-                placeholder="Search products, categories, or brands..."
-                className="pl-10 glass-card border-none focus:ring-2 focus:ring-blue-500/20 transition-all"
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setSearchFocused(false)}
-              />
-            </motion.div>
-          </div>
-
           {/* Right Side */}
-          <div className="flex items-center gap-3 relative">
-            {/* Know More Button */}
+          <div className="flex items-center gap-2">
+            <NotificationBell />
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button
                 variant="ghost"
                 size="sm"
-                className="relative hover:bg-white/50"
+                className="hover:bg-white/50"
                 onClick={() => setShowKnowMore(true)}
               >
                 <Info className="w-5 h-5 text-blue-600" />
@@ -415,25 +391,13 @@ export default function DashboardLayout({
             </motion.div>
           </div>
         </div>
-
-        {/* Mobile Search Bar */}
-        <div className="md:hidden px-4 pb-3">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              type="search"
-              placeholder="Search..."
-              className="pl-9 glass-card border-none"
-            />
-          </div>
-        </div>
       </header>
 
       <div className="flex relative z-10">
         {/* Sidebar - Desktop */}
         <aside className="hidden lg:block w-64 glass-card min-h-[calc(100vh-4rem)] p-4 border-r border-gray-200/50 backdrop-blur-md">
           <div className="mb-6">
-            <motion.div 
+            <motion.div
               className="px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500/10 to-purple-500/10"
               whileHover={{ scale: 1.02 }}
             >
@@ -441,7 +405,7 @@ export default function DashboardLayout({
               <p className="font-semibold text-gray-900 mt-1">{role}</p>
             </motion.div>
           </div>
-          
+
           <nav className="space-y-1">
             {sidebarItems.map((item, index) => {
               const Icon = item.icon;
@@ -554,7 +518,7 @@ export default function DashboardLayout({
 
         {/* Main Content */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <motion.div 
+          <motion.div
             className="mb-8"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -565,7 +529,7 @@ export default function DashboardLayout({
             </h1>
             <p className="text-gray-600 mt-2">Welcome back! Here's what's happening with your dashboard.</p>
           </motion.div>
-          
+
           {children}
         </main>
       </div>

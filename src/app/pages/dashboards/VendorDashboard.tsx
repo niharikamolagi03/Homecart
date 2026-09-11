@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router';
-import { LayoutDashboard, Package, ShoppingCart, LogOut, Plus, Edit, Trash2, Bell, RefreshCw, IndianRupee, Users, CreditCard, AlertTriangle, ArrowUpDown } from 'lucide-react';
+import { Package, ShoppingCart, LogOut, Plus, Edit, Trash2, Bell, RefreshCw, IndianRupee, Users, CreditCard, ArrowUpDown } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import TimeRemaining from '../../components/TimeRemaining';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -8,7 +8,7 @@ import { Badge } from '../../components/ui/badge';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import ProductForm from '../../components/ProductForm';
-import { getMyVendorProducts, deleteVendorProduct, getOrders, getVendorPurchaseRequests, approvePurchaseRequest, rejectPurchaseRequest, getVendorBilling, getVendorRevenueSummary, getVendorStock } from '@/services/api';
+import { getMyVendorProducts, deleteVendorProduct, getOrders, getVendorPurchaseRequests, approvePurchaseRequest, rejectPurchaseRequest, getVendorBilling, getVendorRevenueSummary, getVendorStock, getVendorBulkRequests, respondToBulkRequest } from '@/services/api';
 import billingEvents from '@/services/billingEvents';
 
 interface Toast { id: number; message: string; type: 'success' | 'error' | 'info'; }
@@ -36,8 +36,11 @@ export default function VendorDashboard() {
   const [showForm, setShowForm] = useState(false);
   const [editProduct, setEditProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'products' | 'requests' | 'orders' | 'billing' | 'approvals'>('products');
-  const [vendorOrders, setVendorOrders] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'products' | 'requests' | 'orders' | 'billing' | 'bulkrequests'>('products');
+  const [billSort, setBillSort] = useState<'due_date' | 'remaining_amount'>('due_date');
+  const [bulkRequests, setBulkRequests] = useState<any[]>([]);
+  const [respondingId, setRespondingId] = useState<number | null>(null);
+  const [responseText, setResponseText] = useState<Record<number, string>>({});
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const showToast = (message: string, type: Toast['type'] = 'success') =>
@@ -55,33 +58,23 @@ export default function VendorDashboard() {
 
   const loadOrders = useCallback(async () => {
     try {
-      const [data, rev, reqs, bills] = await Promise.all([
-        getOrders(), getVendorRevenueSummary(), getVendorPurchaseRequests(), getVendorBilling()
+      const [data, rev, reqs, bills, bulkReqs] = await Promise.all([
+        getOrders(), getVendorRevenueSummary(), getVendorPurchaseRequests(), getVendorBilling(),
+        getVendorBulkRequests(),
       ]);
       setOrders(Array.isArray(data) ? data : data.results || []);
       setRevenue(rev);
       setRequests(Array.isArray(reqs) ? reqs : reqs.results || []);
       setVendorBilling(Array.isArray(bills) ? bills : bills.results || []);
+      setBulkRequests(Array.isArray(bulkReqs) ? bulkReqs : bulkReqs.results || []);
     } catch { /* silent */ }
-  }, []);
-
-  const loadVendorOrders = useCallback(async () => {
-    try {
-      const response = await fetch('/api/orders/vendor-orders/', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      const data = await response.json();
-      setVendorOrders(Array.isArray(data) ? data : data.results || []);
-    } catch (err) {
-      console.error('Failed to load vendor orders:', err);
-    }
   }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    await Promise.all([loadProducts(), loadOrders(), loadVendorOrders()]);
+    await Promise.all([loadProducts(), loadOrders()]);
     setLoading(false);
-  }, [loadProducts, loadOrders, loadVendorOrders]);
+  }, [loadProducts, loadOrders]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -126,15 +119,13 @@ export default function VendorDashboard() {
 
   const pendingRequests = requests.filter((r: any) => r.status === 'pending');
   const unpaidBilling = vendorBilling.filter((b: any) => b.status !== 'paid');
-  const pendingApprovals = vendorOrders.filter((o: any) => 
-    o.vendor_approvals?.some((a: any) => a.vendor === user.id && a.status === 'PENDING')
-  );
+  const pendingBulkRequests = bulkRequests.filter((r: any) => r.status === 'PENDING');
 
   const sidebarItems = [
-    { icon: LayoutDashboard, label: 'Products', active: activeTab === 'products', onClick: () => setActiveTab('products') },
+    { icon: Package, label: 'Products', active: activeTab === 'products', onClick: () => setActiveTab('products') },
     { icon: Users, label: `Requests${pendingRequests.length > 0 ? ` (${pendingRequests.length})` : ''}`, active: activeTab === 'requests', onClick: () => setActiveTab('requests') },
     { icon: ShoppingCart, label: 'Orders', active: activeTab === 'orders', onClick: () => setActiveTab('orders') },
-    { icon: AlertTriangle, label: `Approvals${pendingApprovals.length > 0 ? ` (${pendingApprovals.length})` : ''}`, active: activeTab === 'approvals', onClick: () => setActiveTab('approvals') },
+    { icon: IndianRupee, label: `Bulk${pendingBulkRequests.length > 0 ? ` (${pendingBulkRequests.length})` : ''}`, active: activeTab === 'bulkrequests', onClick: () => setActiveTab('bulkrequests') },
     { icon: CreditCard, label: `Payments${unpaidBilling.length > 0 ? ` (${unpaidBilling.length})` : ''}`, active: activeTab === 'billing', onClick: () => setActiveTab('billing') },
     { icon: LogOut, label: 'Logout', onClick: () => { localStorage.clear(); navigate('/login'); } },
   ];
@@ -153,29 +144,6 @@ export default function VendorDashboard() {
       setRequests(prev => prev.map((r: any) => r.id === id ? { ...r, status: 'rejected' } : r));
       showToast('Request rejected. Shopkeeper notified.', 'info');
     } catch (err: any) { showToast(err.message || 'Failed', 'error'); }
-  };
-
-  const handleApprovalAction = async (orderId: number, action: 'APPROVED' | 'REJECTED') => {
-    try {
-      const response = await fetch('/api/orders/vendor-approval-action/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ order_id: orderId, action }),
-      });
-
-      if (!response.ok) throw new Error('Failed to update approval');
-
-      const result = await response.json();
-      showToast(action === 'APPROVED' ? 'Order approved!' : 'Order rejected.', action === 'APPROVED' ? 'success' : 'info');
-      
-      // Refresh vendor orders to show updated status
-      loadVendorOrders();
-    } catch (err: any) {
-      showToast(err.message || 'Failed to update approval', 'error');
-    }
   };
 
   const stats = [
@@ -548,106 +516,96 @@ export default function VendorDashboard() {
             </div>
           )}
 
-          {/* Approvals Tab */}
-          {activeTab === 'approvals' && (
-            <div className="space-y-6">
-              <Card className="border-none shadow-md">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>Order Approvals</CardTitle>
-                  <Button variant="outline" size="sm" onClick={loadVendorOrders}><RefreshCw className="w-4 h-4" /></Button>
-                </CardHeader>
-                <CardContent>
-                  {vendorOrders.length === 0 ? (
-                    <div className="text-center py-12 text-gray-400"><AlertTriangle className="w-12 h-12 mx-auto mb-3 text-gray-300" /><p>No orders requiring approval.</p></div>
-                  ) : (
-                    <div className="space-y-4">
-                      {vendorOrders.map((order: any) => {
-                        const myApproval = order.vendor_approvals?.find((a: any) => a.vendor === user.id);
-                        const isPending = myApproval?.status === 'PENDING';
-                        const isApproved = myApproval?.status === 'APPROVED';
-                        const isRejected = myApproval?.status === 'REJECTED';
-
-                        return (
-                          <div key={order.id} className="border rounded-xl p-4 hover:bg-gray-50">
-                            <div className="flex items-start justify-between mb-3">
-                              <div>
-                                <h3 className="font-semibold text-lg">Order #{order.id}</h3>
-                                <p className="text-sm text-gray-500">
-                                  Customer: {order.customer?.name} • {new Date(order.created_at).toLocaleDateString()}
-                                </p>
+          {/* Bulk Customer Requests Tab */}
+          {activeTab === 'bulkrequests' && (
+            <Card className="border-none shadow-md">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Bulk Requests from Customers</CardTitle>
+                <Button variant="outline" size="sm" onClick={loadOrders}><RefreshCw className="w-4 h-4" /></Button>
+              </CardHeader>
+              <CardContent>
+                {bulkRequests.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p>No bulk requests from customers yet.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {bulkRequests.map((req: any) => (
+                      <motion.div key={req.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+                        <Card className={`border ${req.status === 'PENDING' ? 'border-yellow-200 bg-yellow-50' : req.status === 'ACCEPTED' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                          <CardContent className="p-4">
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                              <div className="flex-1">
+                                <p className="font-semibold text-gray-900">{req.product_name}</p>
+                                <p className="text-sm text-gray-600">From: {req.customer_name} • Qty: {req.quantity}</p>
+                                {req.notes && <p className="text-xs text-gray-500 mt-1">Notes: {req.notes}</p>}
+                                <p className="text-xs text-gray-400 mt-1">{new Date(req.created_at).toLocaleDateString()}</p>
+                                {req.vendor_response && (
+                                  <p className="text-xs text-blue-700 mt-1">Your response: {req.vendor_response}</p>
+                                )}
                               </div>
-                              <div className="text-right">
-                                <p className="font-bold text-blue-600">₹{order.total_price}</p>
+                              <div className="flex flex-col items-end gap-2 shrink-0">
                                 <Badge className={
-                                  order.status === 'PENDING_VENDOR_APPROVAL' ? 'bg-yellow-100 text-yellow-700' :
-                                  order.status === 'VENDOR_APPROVED' ? 'bg-green-100 text-green-700' :
-                                  order.status === 'VENDOR_REJECTED' ? 'bg-red-100 text-red-700' :
-                                  'bg-gray-100 text-gray-700'
-                                }>
-                                  {order.status.replace('_', ' ')}
-                                </Badge>
-                              </div>
-                            </div>
-
-                            {/* Order Items */}
-                            <div className="mb-4">
-                              <h4 className="font-medium text-sm text-gray-700 mb-2">Items from your store:</h4>
-                              <div className="space-y-2">
-                                {order.items?.filter((item: any) => item.vendor === user.id).map((item: any) => (
-                                  <div key={item.id} className="flex justify-between items-center bg-gray-50 p-2 rounded">
-                                    <div>
-                                      <span className="font-medium">{item.product?.name}</span>
-                                      <span className="text-sm text-gray-500 ml-2">Qty: {item.quantity}</span>
+                                  req.status === 'ACCEPTED' ? 'bg-green-100 text-green-700 border-0' :
+                                  req.status === 'REJECTED' ? 'bg-red-100 text-red-700 border-0' :
+                                  'bg-yellow-100 text-yellow-700 border-0'
+                                }>{req.status}</Badge>
+                                {req.status === 'PENDING' && (
+                                  <div className="flex flex-col gap-2 w-full">
+                                    <textarea
+                                      className="w-full border rounded-lg p-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                      rows={2}
+                                      placeholder="Optional response message..."
+                                      value={responseText[req.id] || ''}
+                                      onChange={e => setResponseText(p => ({ ...p, [req.id]: e.target.value }))}
+                                    />
+                                    <div className="flex gap-2">
+                                      <Button
+                                        size="sm"
+                                        className="bg-green-600 text-white flex-1"
+                                        disabled={respondingId === req.id}
+                                        onClick={async () => {
+                                          setRespondingId(req.id);
+                                          try {
+                                            await respondToBulkRequest(req.id, { status: 'ACCEPTED', vendor_response: responseText[req.id] || '' });
+                                            setBulkRequests(prev => prev.map((r: any) => r.id === req.id ? { ...r, status: 'ACCEPTED', vendor_response: responseText[req.id] || '' } : r));
+                                            showToast('Request accepted. Customer notified.');
+                                          } catch (err: any) { showToast(err.message || 'Failed', 'error'); }
+                                          finally { setRespondingId(null); }
+                                        }}
+                                      >Accept</Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-red-600 border-red-200 flex-1"
+                                        disabled={respondingId === req.id}
+                                        onClick={async () => {
+                                          setRespondingId(req.id);
+                                          try {
+                                            await respondToBulkRequest(req.id, { status: 'REJECTED', vendor_response: responseText[req.id] || '' });
+                                            setBulkRequests(prev => prev.map((r: any) => r.id === req.id ? { ...r, status: 'REJECTED', vendor_response: responseText[req.id] || '' } : r));
+                                            showToast('Request rejected. Customer notified.', 'info');
+                                          } catch (err: any) { showToast(err.message || 'Failed', 'error'); }
+                                          finally { setRespondingId(null); }
+                                        }}
+                                      >Reject</Button>
                                     </div>
-                                    <span className="font-semibold">₹{item.price * item.quantity}</span>
                                   </div>
-                                ))}
+                                )}
                               </div>
                             </div>
-
-                            {/* Approval Status */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm text-gray-600">Your approval:</span>
-                                <Badge className={
-                                  isApproved ? 'bg-green-100 text-green-700' :
-                                  isRejected ? 'bg-red-100 text-red-700' :
-                                  'bg-yellow-100 text-yellow-700'
-                                }>
-                                  {isApproved ? '✓ Approved' : isRejected ? '✗ Rejected' : '⏳ Pending'}
-                                </Badge>
-                              </div>
-
-                              {/* Action Buttons */}
-                              {isPending && (
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="text-red-600 border-red-200 hover:bg-red-50"
-                                    onClick={() => handleApprovalAction(order.id, 'REJECTED')}
-                                  >
-                                    Reject
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    className="bg-green-600 hover:bg-green-700"
-                                    onClick={() => handleApprovalAction(order.id, 'APPROVED')}
-                                  >
-                                    Approve
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
+
+          {/* Approvals Tab — removed (bulk order feature not yet implemented) */}
         </div>
       </DashboardLayout>
     </>

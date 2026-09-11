@@ -49,11 +49,26 @@ A modern, production-ready marketplace web application built with React, TypeScr
 
 ## 🚀 Getting Started
 
-The application is ready to run. Navigate through:
-1. Start at the landing page (/)
-2. Choose your role (/roles)
-3. Sign in or register (/login or /register)
-4. Access your dashboard based on your role
+### Frontend
+
+```bash
+npm install
+npm run dev
+```
+
+The frontend uses `VITE_API_URL` from `.env.development` (default: `http://127.0.0.1:8000/api`).
+
+### Backend
+
+```bash
+cd local_vendors_marketplace
+cp .env.example .env
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
+```
+
+For production, set `DEBUG=False`, a strong `SECRET_KEY`, the real `ALLOWED_HOSTS`, and the deployed frontend address in `CORS_ALLOWED_ORIGINS`.
 
 ## 📁 Project Structure
 
@@ -125,6 +140,8 @@ src/
 - Route optimization
 - Earnings dashboard
 - Customer ratings
+- New-order notifications with customer address, payment, and total
+- Live customer destination and road-route map
 
 ## 📝 Notes
 

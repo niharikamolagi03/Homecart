@@ -3,11 +3,18 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from django.db import transaction
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
-from .models import Order, OrderItem, VendorApproval
-from .serializers import OrderSerializer, PlaceOrderSerializer, UpdateOrderStatusSerializer, BulkOrderSerializer, VendorApprovalSerializer, VendorApprovalActionSerializer
+from .models import Order, OrderItem, VendorApproval, CustomerBulkRequest
+from .serializers import (
+    OrderSerializer, PlaceOrderSerializer, UpdateOrderStatusSerializer,
+    BulkOrderSerializer, VendorApprovalSerializer, VendorApprovalActionSerializer,
+    CustomerBulkRequestSerializer,
+)
 from apps.cart.models import Cart
 from apps.users.models import User
+from apps.products.models import Notification
+from apps.delivery.models import DeliveryAssignment
 
 
 class OrderListView(generics.ListAPIView):
@@ -48,6 +55,7 @@ class PlaceOrderView(generics.GenericAPIView):
         orders = []
         for shopkeeper, items in shopkeeper_items.items():
             total = sum(item.total_price for item in items)
+            payment_label = 'Cash on Delivery' if serializer.validated_data.get('payment_method', 'CASH') == 'CASH' else 'UPI'
             order = Order.objects.create(
                 customer=request.user,
                 shopkeeper=shopkeeper,
@@ -55,10 +63,12 @@ class PlaceOrderView(generics.GenericAPIView):
                 delivery_address=serializer.validated_data['delivery_address'],
                 latitude=serializer.validated_data.get('latitude'),
                 longitude=serializer.validated_data.get('longitude'),
+                payment_method=serializer.validated_data.get('payment_method', 'CASH'),
             )
             for item in items:
                 OrderItem.objects.create(
                     order=order, product=item.product,
+                    vendor=item.product.vendor_product.vendor,
                     quantity=item.quantity, price=item.product.selling_price
                 )
                 item.product.stock = max(0, item.product.stock - item.quantity)
@@ -67,12 +77,45 @@ class PlaceOrderView(generics.GenericAPIView):
                 item.product.save()
 
             # Auto-assign an available delivery agent
+            # Assign fairly instead of always selecting the first delivery account.
             delivery_agent = User.objects.filter(
                 role='DELIVERY', is_approved=True, is_active=True
-            ).first()
+            ).annotate(
+                active_delivery_count=Count(
+                    'assigned_orders',
+                    filter=Q(assigned_orders__status__in=[
+                        'PENDING', 'ACCEPTED', 'PREPARING', 'OUT_FOR_DELIVERY'
+                    ])
+                )
+            ).order_by('active_delivery_count', 'id').first()
             if delivery_agent:
                 order.assigned_delivery = delivery_agent
                 order.save()
+
+                # Keep the assignment model in sync with the order so that
+                # live location updates can be resolved for the customer.
+                DeliveryAssignment.objects.get_or_create(
+                    order=order, defaults={'delivery_partner': delivery_agent}
+                )
+
+                # Notify delivery agent of the new assignment
+                Notification.objects.create(
+                    user=delivery_agent,
+                    message=(
+                        f"🚚 New delivery assigned: Order #{order.id} from {request.user.name}. "
+                        f"Address: {order.delivery_address}. "
+                        f"Total: ₹{order.total_price} | {payment_label}."
+                    )
+                )
+
+            # Notify shopkeeper of new order
+            Notification.objects.create(
+                user=shopkeeper,
+                message=(
+                    f"🛒 New order #{order.id} from {request.user.name}. "
+                    f"Total: ₹{order.total_price} | Payment: {payment_label}"
+                )
+            )
 
             orders.append(order)
 
@@ -104,10 +147,43 @@ class UpdateOrderStatusView(generics.GenericAPIView):
 
     def patch(self, request, pk):
         order = get_object_or_404(Order, id=pk)
+        user = request.user
+        new_status = request.data.get('status', '')
+
+        # Role-based ownership check — only the relevant party can update
+        if user.role == 'DELIVERY':
+            if order.assigned_delivery != user:
+                return Response(
+                    {'error': 'You are not assigned to this order.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        elif user.role == 'SHOPKEEPER':
+            if order.shopkeeper != user:
+                return Response(
+                    {'error': 'This order does not belong to your shop.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        elif user.role == 'CUSTOMER':
+            # Customers use the cancel endpoint, not this one
+            return Response(
+                {'error': 'Customers cannot update order status directly.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        elif user.role not in ('ADMIN',):
+            return Response(
+                {'error': 'You do not have permission to update order status.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         order.status = serializer.validated_data['status']
         order.save()
+        if user.role == 'DELIVERY':
+            Notification.objects.create(
+                user=order.customer,
+                message=f"🚚 Order #{order.id} is now {order.get_status_display()}."
+            )
         return Response({'message': 'Status updated', 'status': order.status})
 
 
@@ -263,3 +339,100 @@ class VendorApprovalActionView(generics.GenericAPIView):
             'message': f'Order {vendor_approval.status.lower()}',
             'order_status': order.status,
         })
+
+
+# ── Customer Bulk Request Views ───────────────────────────────────────────────
+
+class CustomerBulkRequestCreateView(generics.GenericAPIView):
+    """Customer submits a bulk order request directly to a vendor."""
+    permission_classes = [IsAuthenticated]
+    serializer_class = CustomerBulkRequestSerializer
+
+    def post(self, request):
+        vendor_id = request.data.get('vendor_id')
+        product_name = request.data.get('product_name', '').strip()
+        quantity = request.data.get('quantity')
+        notes = request.data.get('notes', '').strip()
+
+        if not vendor_id:
+            return Response({'error': 'vendor_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not product_name:
+            return Response({'error': 'product_name is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            quantity = int(quantity)
+            if quantity < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            return Response({'error': 'quantity must be a positive integer.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        vendor = get_object_or_404(User, id=vendor_id, role='VENDOR')
+
+        bulk_req = CustomerBulkRequest.objects.create(
+            customer=request.user,
+            vendor=vendor,
+            product_name=product_name,
+            quantity=quantity,
+            notes=notes,
+        )
+
+        # Notify vendor
+        from apps.products.models import Notification
+        Notification.objects.create(
+            user=vendor,
+            message=(
+                f"📦 Bulk request from {request.user.name}: "
+                f"'{product_name}' × {quantity}. "
+                f"{('Notes: ' + notes) if notes else ''}"
+            )
+        )
+
+        return Response(CustomerBulkRequestSerializer(bulk_req).data, status=status.HTTP_201_CREATED)
+
+
+class CustomerBulkRequestListView(generics.ListAPIView):
+    """Customer sees their own bulk requests."""
+    serializer_class = CustomerBulkRequestSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return CustomerBulkRequest.objects.filter(customer=self.request.user)
+
+
+class VendorBulkRequestListView(generics.ListAPIView):
+    """Vendor sees bulk requests addressed to them."""
+    serializer_class = CustomerBulkRequestSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return CustomerBulkRequest.objects.filter(vendor=self.request.user)
+
+
+class VendorBulkRequestRespondView(APIView):
+    """Vendor accepts or rejects a customer bulk request."""
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        bulk_req = get_object_or_404(CustomerBulkRequest, id=pk, vendor=request.user)
+        new_status = request.data.get('status')
+        vendor_response = request.data.get('vendor_response', '').strip()
+
+        if new_status not in ('ACCEPTED', 'REJECTED'):
+            return Response({'error': "status must be 'ACCEPTED' or 'REJECTED'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        bulk_req.status = new_status
+        bulk_req.vendor_response = vendor_response
+        bulk_req.save()
+
+        # Notify customer
+        from apps.products.models import Notification
+        action = '✅ accepted' if new_status == 'ACCEPTED' else '❌ rejected'
+        Notification.objects.create(
+            user=bulk_req.customer,
+            message=(
+                f"Your bulk request for '{bulk_req.product_name}' (×{bulk_req.quantity}) "
+                f"was {action} by {request.user.name}."
+                f"{(' Response: ' + vendor_response) if vendor_response else ''}"
+            )
+        )
+
+        return Response(CustomerBulkRequestSerializer(bulk_req).data)

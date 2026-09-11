@@ -1,10 +1,10 @@
-const API_URL = import.meta.env.VITE_API_URL;
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
 
 const refreshAccessToken = async () => {
   const refreshToken = localStorage.getItem('refresh_token');
   if (!refreshToken) throw new Error('No refresh token available');
 
-  const response = await fetch(`${API_URL}/auth/token/refresh/`, {
+  const response = await fetch(`${API_BASE_URL}/auth/token/refresh/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh: refreshToken }),
@@ -33,7 +33,7 @@ const apiCall = async (endpoint, options = {}) => {
     ...options.headers,
   };
 
-  let res = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+  let res = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
 
   // If unauthorized and we have a token, try refreshing
   if (res.status === 401 && token) {
@@ -44,7 +44,7 @@ const apiCall = async (endpoint, options = {}) => {
         ...headers,
         Authorization: `Bearer ${newToken}`,
       };
-      res = await fetch(`${API_URL}${endpoint}`, { ...options, headers: newHeaders });
+      res = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers: newHeaders });
     } catch (refreshError) {
       throw new Error('Session expired. Please login again.');
     }
@@ -149,3 +149,12 @@ export const updateReview = (id, data) => apiCall(`/reviews/${id}/`, { method: '
 export const deleteReview = (id) => apiCall(`/reviews/${id}/`, { method: 'DELETE' });
 export const getMyReviews = () => apiCall('/reviews/my/');
 export const getProductReviewStats = (shopkeeperProductId) => apiCall(`/reviews/${shopkeeperProductId}/stats/`);
+
+// Customer Bulk Requests (customer → vendor direct)
+export const createBulkRequest = (data) => apiCall('/bulk-requests/', { method: 'POST', body: JSON.stringify(data) });
+export const getMyBulkRequests = () => apiCall('/bulk-requests/mine/');
+export const getVendorBulkRequests = () => apiCall('/bulk-requests/vendor/');
+export const respondToBulkRequest = (id, data) => apiCall(`/bulk-requests/${id}/respond/`, { method: 'PATCH', body: JSON.stringify(data) });
+
+// Vendor list (for bulk request vendor picker)
+export const getVendorList = () => apiCall('/vendors/');

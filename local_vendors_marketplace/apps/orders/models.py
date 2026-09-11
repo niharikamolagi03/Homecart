@@ -15,10 +15,15 @@ class Order(models.Model):
         DELIVERED = 'DELIVERED', 'Delivered'
         CANCELLED = 'CANCELLED', 'Cancelled'
 
+    class PaymentMethod(models.TextChoices):
+        CASH = 'CASH', 'Cash on Delivery'
+        UPI = 'UPI', 'UPI'
+
     class PaymentStatus(models.TextChoices):
         PENDING = 'PENDING', 'Pending'
         PAID = 'PAID', 'Paid'
         REFUNDED = 'REFUNDED', 'Refunded'
+        FAILED = 'FAILED', 'Failed'
 
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
     shopkeeper = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='shopkeeper_orders')
@@ -26,6 +31,9 @@ class Order(models.Model):
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=25, choices=Status.choices, default=Status.PENDING)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PENDING)
+    payment_method = models.CharField(max_length=10, choices=PaymentMethod.choices, default=PaymentMethod.CASH)
+    razorpay_order_id = models.CharField(max_length=100, blank=True)
+    razorpay_payment_id = models.CharField(max_length=100, blank=True)
     delivery_address = models.TextField()
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
@@ -70,3 +78,28 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.quantity} x {self.product.vendor_product.name}"
+
+
+class CustomerBulkRequest(models.Model):
+    """Customer requests a large/custom quantity of a vendor product directly."""
+
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        ACCEPTED = 'ACCEPTED', 'Accepted'
+        REJECTED = 'REJECTED', 'Rejected'
+
+    customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bulk_requests')
+    vendor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='customer_bulk_requests')
+    product_name = models.CharField(max_length=255)
+    quantity = models.PositiveIntegerField()
+    notes = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    vendor_response = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Bulk request by {self.customer.name} for {self.product_name} (x{self.quantity})"

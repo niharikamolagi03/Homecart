@@ -1,6 +1,13 @@
 # Dependencies
 node_modules/
 
+# Python environments and bytecode
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
 # Build output
 dist/
 

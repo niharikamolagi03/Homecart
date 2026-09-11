@@ -31,7 +31,6 @@ const BulkOrderPanel: React.FC<BulkOrderPanelProps> = ({ vendorData, onClose }) 
       return next;
     });
   };
-
   const submitBulk = async () => {
     const items = Object.entries(cart).map(([product_id, quantity]) => ({
       product_id: Number(product_id),
@@ -53,7 +52,6 @@ const BulkOrderPanel: React.FC<BulkOrderPanelProps> = ({ vendorData, onClose }) 
   const total = vendorData.reduce((sum, vendor) =>
     sum + vendor.products.reduce((vSum, p) => vSum + (cart[p.id] || 0) * p.price, 0), 0
   );
-
   return (
     <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.5)", zIndex: 1000 }}>
       <div style={{ margin: "5% auto", width: "90%", maxWidth: "800px", background: "white", padding: "20px", borderRadius: "8px" }}>
@@ -103,5 +101,4 @@ const BulkOrderPanel: React.FC<BulkOrderPanelProps> = ({ vendorData, onClose }) 
     </div>
   );
 };
-
 export default BulkOrderPanel;

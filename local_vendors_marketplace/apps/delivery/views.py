@@ -114,10 +114,17 @@ class GetDeliveryLocationView(APIView):
 
     def get(self, request, order_id):
         order = get_object_or_404(Order, id=order_id, customer=request.user)
-        assignment = get_object_or_404(DeliveryAssignment, order=order)
+        assignment = DeliveryAssignment.objects.filter(order=order).first()
+        delivery_partner = assignment.delivery_partner if assignment else order.assigned_delivery
+        if not delivery_partner:
+            return Response({'error': 'Delivery partner not assigned yet'}, status=status.HTTP_404_NOT_FOUND)
         tracking = DeliveryTracking.objects.filter(
-            user=assignment.delivery_partner
+            user=delivery_partner
         ).first()
         if not tracking:
             return Response({'error': 'Location not available yet'}, status=status.HTTP_404_NOT_FOUND)
-        return Response(DeliveryTrackingSerializer(tracking).data)
+        return Response({
+            **DeliveryTrackingSerializer(tracking).data,
+            'order_status': order.status,
+            'delivery_partner_name': delivery_partner.name,
+        })
