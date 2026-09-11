@@ -11,10 +11,9 @@ __pycache__/
 # Build output
 dist/
 
-# Env files — commit .env.development but NOT .env.production
-.env.production
-.env.local
-.env.*.local
+# Environment files — keep only the safe template under version control.
+.env*
+!.env.example
 
 # Misc
 .DS_Store
