@@ -2,7 +2,7 @@
 
 A modern, production-ready marketplace web application built with React, TypeScript, and Tailwind CSS featuring glass morphism UI design.
 
-## 🎨 Features
+##  Features
 
 - **Beautiful Glass Morphism UI** - Modern design with backdrop blur effects and smooth animations
 - **Multi-Role Support** - Dedicated dashboards for 5 different user types
@@ -10,7 +10,7 @@ A modern, production-ready marketplace web application built with React, TypeScr
 - **Modern Tech Stack** - React, TypeScript, React Router, Motion (Framer Motion), Recharts
 - **Production Ready** - Clean code structure with reusable components
 
-## 📱 Pages
+##  Pages
 
 ### Public Pages
 - **Landing Page** - Hero section, features, stats, testimonials
@@ -25,7 +25,7 @@ A modern, production-ready marketplace web application built with React, TypeScr
 4. **Customer Dashboard** - Product browsing, order history, shopping cart
 5. **Delivery Dashboard** - Active deliveries, route optimization, earnings
 
-## 🎨 Design System
+##  Design System
 
 ### Color Palette
 - **Primary**: Blue (#3B82F6)
@@ -47,7 +47,7 @@ A modern, production-ready marketplace web application built with React, TypeScr
 - Responsive navigation
 - Interactive charts and graphs
 
-## 🚀 Getting Started
+##  Getting Started
 
 ### Frontend
 
@@ -109,7 +109,7 @@ src/
 - **Lucide React** - Icons
 - **Radix UI** - Accessible components
 
-## 🎯 Key Features by Role
+##  Key Features by Role
 
 ### Admin
 - User analytics and management
@@ -143,7 +143,7 @@ src/
 - New-order notifications with customer address, payment, and total
 - Live customer destination and road-route map
 
-## 📝 Notes
+##  Notes
 
 - All authentication flows are frontend-only (ready for backend integration)
 - Mock data is used for demonstrations
