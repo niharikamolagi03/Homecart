@@ -10,6 +10,7 @@ from .views import (
     ApprovePurchaseRequestView, RejectPurchaseRequestView,
     ShopkeeperPurchaseRequestsView, SetSellingPriceView,
     PendingSetupProductsView,
+    DeliveryPurchaseRequestsView, UpdatePurchaseRequestDeliveryStatusView,
     NotificationListView, MarkNotificationsReadView,
     ShopkeeperBillingListView, MakePaymentView,
     VendorBillingView, VendorRevenueSummaryView, VendorStockView,
@@ -37,6 +38,8 @@ urlpatterns = [
     path('purchase-requests/mine/', ShopkeeperPurchaseRequestsView.as_view()),
     path('purchase-requests/pending-setup/', PendingSetupProductsView.as_view()),
     path('purchase-requests/vendor/', VendorPurchaseRequestsView.as_view()),
+    path('purchase-requests/delivery/', DeliveryPurchaseRequestsView.as_view()),
+    path('purchase-requests/<int:pk>/delivery-status/', UpdatePurchaseRequestDeliveryStatusView.as_view()),
     path('purchase-requests/<int:pk>/approve/', ApprovePurchaseRequestView.as_view()),
     path('purchase-requests/<int:pk>/reject/', RejectPurchaseRequestView.as_view()),
     # Notifications

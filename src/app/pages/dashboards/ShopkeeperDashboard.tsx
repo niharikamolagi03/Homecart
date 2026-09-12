@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router';
 import {
   Package, ShoppingCart, LogOut, Plus, Trash2, Bell, RefreshCw,
   Store, IndianRupee, Search, ClipboardList, CheckCircle, XCircle,
-  Clock, X, AlertTriangle, CreditCard,
+  Clock, X, AlertTriangle, CreditCard, MapPin,
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import TimeRemaining from '../../components/TimeRemaining';
@@ -11,6 +11,7 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
+import { Textarea } from '../../components/ui/textarea';
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -125,6 +126,8 @@ export default function ShopkeeperDashboard() {
   const [search, setSearch] = useState('');
   const [requestingId, setRequestingId] = useState<number | null>(null);
   const [qtyInputs, setQtyInputs] = useState<Record<number, string>>({});
+  const [descriptionInputs, setDescriptionInputs] = useState<Record<number, string>>({});
+  const [locationInputs, setLocationInputs] = useState<Record<number, { address: string; latitude?: number; longitude?: number; locating?: boolean }>>({});
   const [activateTarget, setActivateTarget] = useState<ActivateTarget | null>(null);
   const [paymentInputs, setPaymentInputs] = useState<Record<number, string>>({});
   const [payingId, setPayingId] = useState<number | null>(null);
@@ -156,19 +159,51 @@ export default function ShopkeeperDashboard() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const handleRequestProduct = async (vp: any) => {
-    const qty = parseInt(qtyInputs[vp.id] || '1');
-    if (qty < 1) { showToast('Enter a valid quantity', 'error'); return; }
+    const rawQuantity = qtyInputs[vp.id] ?? '1';
+    const qty = Number(rawQuantity);
+    const location = locationInputs[vp.id];
+    if (!Number.isInteger(qty) || qty < 1) { showToast('Enter a whole-number quantity of at least 1', 'error'); return; }
+    if (!location?.address?.trim()) { showToast('Add your shop delivery location first', 'error'); return; }
     const existing = myRequests.find((r: any) => r.product_id === vp.id);
     if (existing?.status === 'pending') { showToast('Already have a pending request for this product', 'info'); return; }
     setRequestingId(vp.id);
     try {
-      await createPurchaseRequest({ product_id: vp.id, quantity: qty });
-      showToast(`Request sent for "${vp.name}". Waiting for vendor approval.`);
+      await createPurchaseRequest({
+        product_id: vp.id,
+        quantity: qty,
+        description: descriptionInputs[vp.id] || '',
+        delivery_address: location.address.trim(),
+        latitude: location.latitude,
+        longitude: location.longitude,
+      });
+      showToast(`Request sent for "${vp.name}". Waiting for the vendor's decision.`);
       setQtyInputs(p => { const n = { ...p }; delete n[vp.id]; return n; });
+      setDescriptionInputs(p => { const n = { ...p }; delete n[vp.id]; return n; });
       await loadData();
       setActiveTab('requests');
     } catch (err: any) { showToast(err.message || 'Failed to send request', 'error'); }
     finally { setRequestingId(null); }
+  };
+
+  const useCurrentLocation = (productId: number) => {
+    if (!navigator.geolocation) { showToast('Location is not supported by this browser', 'error'); return; }
+    setLocationInputs(prev => ({ ...prev, [productId]: { ...prev[productId], address: prev[productId]?.address || '', locating: true } }));
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const latitude = coords.latitude;
+        const longitude = coords.longitude;
+        setLocationInputs(prev => ({
+          ...prev,
+          [productId]: { address: `Current shop location (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`, latitude, longitude },
+        }));
+        showToast('Current shop location added');
+      },
+      () => {
+        setLocationInputs(prev => ({ ...prev, [productId]: { ...prev[productId], locating: false } }));
+        showToast('Could not access your location. Enter the address manually.', 'error');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
   const handleRemove = async (id: number, name: string) => {
@@ -396,14 +431,35 @@ export default function ShopkeeperDashboard() {
                               <p className="text-sm font-semibold text-gray-700 mb-3">Wholesale: ₹{vp.base_price} | Stock: {vp.stock}</p>
                               {alreadyActive ? (
                                 <Badge className="w-full justify-center bg-green-100 text-green-700 border-0">Already in your shop</Badge>
-                              ) : existingReq ? (
+                              ) : existingReq && existingReq.status !== 'rejected' ? (
                                 <div className="text-center">{statusBadge(existingReq.status)}</div>
                               ) : (
                                 <div className="space-y-2">
                                   <div>
-                                    <Label className="text-xs">Quantity to request</Label>
-                                    <Input type="number" min="1" max={vp.stock} placeholder="Qty"
-                                      value={qtyInputs[vp.id] || ''} onChange={e => setQtyInputs(p => ({ ...p, [vp.id]: e.target.value }))} className="h-8 text-sm" />
+                                    <Label htmlFor={`quantity-${vp.id}`} className="text-xs font-medium">Quantity you want from this vendor</Label>
+                                    <Input id={`quantity-${vp.id}`} type="number" inputMode="numeric" min="1" step="1" required
+                                      value={qtyInputs[vp.id] ?? '1'} onChange={e => setQtyInputs(p => ({ ...p, [vp.id]: e.target.value }))} className="h-9 text-sm mt-1" />
+                                    <p className="text-[11px] text-gray-400 mt-1">Vendor stock currently shown: {vp.stock}</p>
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Order description <span className="text-gray-400">(optional)</span></Label>
+                                    <Textarea placeholder="Notes for the vendor or delivery partner" rows={2}
+                                      value={descriptionInputs[vp.id] || ''}
+                                      onChange={e => setDescriptionInputs(p => ({ ...p, [vp.id]: e.target.value }))}
+                                      className="mt-1 text-sm" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <Label className="text-xs">Shop delivery location</Label>
+                                      <Button type="button" variant="ghost" size="sm" className="h-6 px-1 text-xs text-cyan-700"
+                                        disabled={locationInputs[vp.id]?.locating}
+                                        onClick={() => useCurrentLocation(vp.id)}>
+                                        <MapPin className="w-3 h-3 mr-1" />{locationInputs[vp.id]?.locating ? 'Locating...' : 'Use current location'}
+                                      </Button>
+                                    </div>
+                                    <Input placeholder="Address or use current location" value={locationInputs[vp.id]?.address || ''}
+                                      onChange={e => setLocationInputs(p => ({ ...p, [vp.id]: { address: e.target.value } }))}
+                                      className="h-8 text-sm mt-1" />
                                   </div>
                                   <Button size="sm" className="w-full bg-cyan-600 text-white" disabled={requestingId === vp.id} onClick={() => handleRequestProduct(vp)}>
                                     {requestingId === vp.id ? 'Sending...' : <span className="flex items-center justify-center"><Plus className="w-3 h-3 mr-1" />Request from Vendor</span>}
@@ -451,12 +507,19 @@ export default function ShopkeeperDashboard() {
                                   <div>
                                     <p className="font-semibold text-gray-900">{req.product_name}</p>
                                     <p className="text-sm text-gray-500">Vendor: {req.vendor_name} • Qty: {req.quantity}</p>
+                                    {req.description && <p className="text-xs text-gray-600 mt-1">Note: {req.description}</p>}
+                                    {req.delivery_address && <p className="text-xs text-gray-600 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3 text-cyan-600" />{req.delivery_address}</p>}
                                     <p className="text-xs text-gray-400">Wholesale: ₹{req.product_base_price}</p>
                                     <p className="text-xs text-gray-400">{new Date(req.created_at).toLocaleDateString()}</p>
                                   </div>
                                 </div>
                                 <div className="flex flex-col items-end gap-2">
                                   {statusBadge(req.status)}
+                                  {req.assigned_delivery ? (
+                                    <Badge className={req.delivery_status === 'DELIVERED' ? 'bg-green-100 text-green-700 border-0' : 'bg-blue-100 text-blue-700 border-0'}>
+                                      🚚 {req.delivery_status?.replaceAll('_', ' ')} · {req.delivery_name || 'Delivery partner'}
+                                    </Badge>
+                                  ) : <Badge className="bg-yellow-100 text-yellow-700 border-0">{req.status === 'pending' ? 'Waiting for vendor approval' : 'Finding delivery partner'}</Badge>}
                                   {needsSetup && sp && (
                                     <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white"
                                       onClick={() => setActivateTarget({ spId: sp.id, basePrice: parseFloat(req.product_base_price), productName: req.product_name })}>

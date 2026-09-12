@@ -7,7 +7,7 @@ import { Badge } from '../../components/ui/badge';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import DeliveryMap from '../../components/DeliveryMap';
-import { updateDeliveryLocation, getOrders, updateOrderStatus } from '@/services/api';
+import { updateDeliveryLocation, getOrders, updateOrderStatus, getDeliveryPurchaseRequests, updatePurchaseRequestDeliveryStatus } from '@/services/api';
 
 interface Toast { id: number; message: string; type: 'success' | 'error' | 'info' | 'warning'; }
 
@@ -27,6 +27,7 @@ export default function DeliveryDashboard() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [restockRequests, setRestockRequests] = useState<any[]>([]);
   const [location, setLocation] = useState({ lat: 0, lng: 0, address: 'Fetching location...', ready: false });
   const watchRef = useRef<number | null>(null);
   const knownOrderIdsRef = useRef<Set<number> | null>(null);
@@ -37,16 +38,18 @@ export default function DeliveryDashboard() {
 
   const refreshOrders = useCallback(async (announceNew = false) => {
     try {
-      const data = await getOrders();
+      const [data, requestsData] = await Promise.all([getOrders(), getDeliveryPurchaseRequests()]);
       const nextOrders = Array.isArray(data) ? data : data.results || [];
-      const nextIds = new Set(nextOrders.map((order: any) => order.id));
+      const nextRequests = Array.isArray(requestsData) ? requestsData : requestsData.results || [];
+      const nextIds = new Set([...nextOrders.map((order: any) => `order-${order.id}`), ...nextRequests.map((request: any) => `request-${request.id}`)]);
       if (announceNew && knownOrderIdsRef.current) {
-        nextOrders
-          .filter((order: any) => !knownOrderIdsRef.current?.has(order.id))
-          .forEach((order: any) => showToast(`New delivery assigned: Order #${order.id}`, 'info'));
+        [...nextOrders.map((order: any) => ({ id: `order-${order.id}`, label: `Order #${order.id}` })), ...nextRequests.map((request: any) => ({ id: `request-${request.id}`, label: `shop restock for ${request.shopkeeper_name}` }))]
+          .filter(item => !knownOrderIdsRef.current?.has(item.id))
+          .forEach(item => showToast(`New delivery assigned: ${item.label}`, 'info'));
       }
       knownOrderIdsRef.current = nextIds;
       setOrders(nextOrders);
+      setRestockRequests(nextRequests);
     } catch {
       if (!knownOrderIdsRef.current) showToast('Failed to load orders', 'error');
     }
@@ -81,11 +84,13 @@ export default function DeliveryDashboard() {
 
   const activeOrders = orders.filter((o: any) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED');
   const deliveredOrders = orders.filter((o: any) => o.status === 'DELIVERED');
+  const activeRestocks = restockRequests.filter((r: any) => r.delivery_status !== 'DELIVERED');
+  const completedRestocks = restockRequests.filter((r: any) => r.delivery_status === 'DELIVERED');
 
   const stats = [
-    { title: 'Total Assigned', value: orders.length.toString(), icon: Package },
-    { title: 'Active', value: activeOrders.length.toString(), icon: Clock },
-    { title: 'Completed', value: deliveredOrders.length.toString(), icon: LayoutDashboard },
+    { title: 'Total Assigned', value: (orders.length + restockRequests.length).toString(), icon: Package },
+    { title: 'Active', value: (activeOrders.length + activeRestocks.length).toString(), icon: Clock },
+    { title: 'Completed', value: (deliveredOrders.length + completedRestocks.length).toString(), icon: LayoutDashboard },
   ];
 
   return (
@@ -138,9 +143,9 @@ export default function DeliveryDashboard() {
                 <DeliveryMap
                   agentLat={location.lat}
                   agentLng={location.lng}
-                  destLat={activeOrders[0]?.latitude ?? undefined}
-                  destLng={activeOrders[0]?.longitude ?? undefined}
-                  destLabel={activeOrders[0]?.customer_name}
+                  destLat={(activeOrders[0] || activeRestocks[0])?.latitude ?? undefined}
+                  destLng={(activeOrders[0] || activeRestocks[0])?.longitude ?? undefined}
+                  destLabel={(activeOrders[0] || activeRestocks[0])?.customer_name || activeRestocks[0]?.shopkeeper_name}
                 />
               ) : (
                 <div className="h-64 flex items-center justify-center bg-gray-50 rounded-xl">
@@ -235,6 +240,45 @@ export default function DeliveryDashboard() {
                   </motion.div>
                 ))
             )}
+
+            {activeRestocks.length > 0 && <h3 className="text-lg font-semibold text-gray-800 pt-4">Shop Restock Deliveries</h3>}
+            {activeRestocks.map((request: any) => (
+              <motion.div key={`request-${request.id}`} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
+                <Card className="border-none shadow-md border-l-4 border-l-cyan-500">
+                  <CardContent className="p-6">
+                    <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge className="bg-cyan-100 text-cyan-700">Shop restock #{request.id}</Badge>
+                          <Badge variant="outline">{request.delivery_status?.replaceAll('_', ' ')}</Badge>
+                        </div>
+                        <p className="font-semibold text-gray-900">{request.quantity} × {request.product_name}</p>
+                        <p className="text-sm text-gray-600">Deliver to: {request.shopkeeper_name}</p>
+                        <p className="text-gray-600 text-sm mt-0.5">{request.delivery_address}</p>
+                        {request.description && <p className="text-xs text-gray-500 mt-2">Note: {request.description}</p>}
+                      </div>
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <Button variant="outline" size="sm" onClick={() => {
+                          if (location.ready) {
+                            const destination = request.latitude != null && request.longitude != null ? `${request.latitude},${request.longitude}` : encodeURIComponent(request.delivery_address);
+                            window.open(`https://www.google.com/maps/dir/${location.lat},${location.lng}/${destination}`, '_blank');
+                          } else showToast('Location not available', 'warning');
+                        }}><Navigation className="w-4 h-4 mr-1" /> Navigate</Button>
+                        {request.delivery_status === 'ASSIGNED' && <Button size="sm" className="bg-blue-600 text-white" onClick={async () => {
+                          try { const updated = await updatePurchaseRequestDeliveryStatus(request.id, 'PICKED_UP'); setRestockRequests(prev => prev.map(r => r.id === request.id ? updated : r)); showToast('Restock marked picked up'); } catch { showToast('Failed to update delivery', 'error'); }
+                        }}>Pick up</Button>}
+                        {request.delivery_status === 'PICKED_UP' && <Button size="sm" className="bg-blue-600 text-white" onClick={async () => {
+                          try { const updated = await updatePurchaseRequestDeliveryStatus(request.id, 'OUT_FOR_DELIVERY'); setRestockRequests(prev => prev.map(r => r.id === request.id ? updated : r)); showToast('Restock is out for delivery'); } catch { showToast('Failed to update delivery', 'error'); }
+                        }}>Out for delivery</Button>}
+                        {request.delivery_status === 'OUT_FOR_DELIVERY' && <Button size="sm" className="bg-green-600 text-white" onClick={async () => {
+                          try { const updated = await updatePurchaseRequestDeliveryStatus(request.id, 'DELIVERED'); setRestockRequests(prev => prev.map(r => r.id === request.id ? updated : r)); showToast('Restock delivered'); } catch { showToast('Failed to update delivery', 'error'); }
+                        }}>Mark delivered</Button>}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
           </div>
         </div>
       </DashboardLayout>

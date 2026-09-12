@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router';
-import { Package, ShoppingCart, LogOut, Plus, Edit, Trash2, Bell, RefreshCw, IndianRupee, Users, CreditCard, ArrowUpDown } from 'lucide-react';
+import { Package, ShoppingCart, LogOut, Plus, Edit, Trash2, Bell, RefreshCw, IndianRupee, Users, CreditCard, ArrowUpDown, MapPin } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import TimeRemaining from '../../components/TimeRemaining';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -291,6 +291,8 @@ export default function VendorDashboard() {
                           <div>
                             <p className="font-semibold text-gray-900">{req.product_name}</p>
                             <p className="text-sm text-gray-500">From: {req.shopkeeper_name} • Qty: {req.quantity}</p>
+                            {req.description && <p className="text-xs text-gray-600 mt-1">Note: {req.description}</p>}
+                            {req.delivery_address && <p className="text-xs text-gray-600 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3 text-cyan-600" />{req.delivery_address}</p>}
                             <p className="text-xs text-gray-400">{new Date(req.created_at).toLocaleDateString()}</p>
                           </div>
                         </div>

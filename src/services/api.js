@@ -125,6 +125,8 @@ export const approvePurchaseRequest = (id) => apiCall(`/purchase-requests/${id}/
 export const rejectPurchaseRequest = (id) => apiCall(`/purchase-requests/${id}/reject/`, { method: 'POST' });
 export const setSellingPrice = (id, data) => apiCall(`/shopkeeper-products/${id}/set-price/`, { method: 'PATCH', body: JSON.stringify(data) });
 export const getPendingSetupProducts = () => apiCall('/purchase-requests/pending-setup/');
+export const getDeliveryPurchaseRequests = () => apiCall('/purchase-requests/delivery/');
+export const updatePurchaseRequestDeliveryStatus = (id, delivery_status) => apiCall(`/purchase-requests/${id}/delivery-status/`, { method: 'PATCH', body: JSON.stringify({ delivery_status }) });
 
 // Admin reset
 export const resetMarketplaceData = () => apiCall('/admin/reset/', { method: 'DELETE' });

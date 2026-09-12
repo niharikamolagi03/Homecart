@@ -93,6 +93,24 @@ class PurchaseRequest(models.Model):
     vendor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_requests')
     product = models.ForeignKey(VendorProduct, on_delete=models.CASCADE, related_name='purchase_requests')
     quantity = models.PositiveIntegerField(default=1)
+    description = models.TextField(blank=True)
+    delivery_address = models.TextField(blank=True)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    assigned_delivery = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='assigned_purchase_requests'
+    )
+    delivery_status = models.CharField(
+        max_length=25,
+        choices=(
+            ('ASSIGNED', 'Assigned'),
+            ('PICKED_UP', 'Picked up'),
+            ('OUT_FOR_DELIVERY', 'Out for delivery'),
+            ('DELIVERED', 'Delivered'),
+        ),
+        default='ASSIGNED'
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -209,6 +209,26 @@ class CreatePurchaseRequestView(APIView):
     def post(self, request):
         product_id = request.data.get('product_id')
         quantity = request.data.get('quantity', 1)
+        description = str(request.data.get('description', '')).strip()
+        delivery_address = str(request.data.get('delivery_address', '')).strip()
+        latitude = request.data.get('latitude')
+        longitude = request.data.get('longitude')
+
+        try:
+            quantity = int(quantity)
+        except (TypeError, ValueError):
+            return Response({'error': 'Quantity must be a whole number.'}, status=400)
+        if quantity < 1:
+            return Response({'error': 'Quantity must be at least 1.'}, status=400)
+        if quantity > 100000:
+            return Response({'error': 'Quantity is too large.'}, status=400)
+        if not delivery_address:
+            return Response({'error': 'Please add your delivery location.'}, status=400)
+        try:
+            latitude = float(latitude) if latitude not in (None, '') else None
+            longitude = float(longitude) if longitude not in (None, '') else None
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid location coordinates.'}, status=400)
 
         vp = get_object_or_404(VendorProduct, id=product_id)
 
@@ -218,17 +238,37 @@ class CreatePurchaseRequestView(APIView):
         ).exists():
             return Response({'error': 'You already have a pending request for this product.'}, status=400)
 
-        pr = PurchaseRequest.objects.create(
-            shopkeeper=request.user,
-            vendor=vp.vendor,
-            product=vp,
-            quantity=quantity,
-        )
+        # A rejected request can be corrected and sent again without violating
+        # the one-request-per-product constraint.
+        pr = PurchaseRequest.objects.filter(
+            shopkeeper=request.user, product=vp, status='rejected'
+        ).first()
+        if pr:
+            pr.quantity = quantity
+            pr.description = description
+            pr.delivery_address = delivery_address
+            pr.latitude = latitude
+            pr.longitude = longitude
+            pr.assigned_delivery = None
+            pr.delivery_status = 'ASSIGNED'
+            pr.status = 'pending'
+            pr.save()
+        else:
+            pr = PurchaseRequest.objects.create(
+                shopkeeper=request.user,
+                vendor=vp.vendor,
+                product=vp,
+                quantity=quantity,
+                description=description,
+                delivery_address=delivery_address,
+                latitude=latitude,
+                longitude=longitude,
+            )
 
         # Notify vendor
         Notification.objects.create(
             user=vp.vendor,
-            message=f"New purchase request from {request.user.name} for '{vp.name}' (qty: {quantity})"
+            message=f"New purchase request from {request.user.name} for '{vp.name}' (qty: {quantity}). Delivery: {delivery_address}"
         )
 
         return Response(PurchaseRequestSerializer(pr).data, status=201)
@@ -244,7 +284,7 @@ class VendorPurchaseRequestsView(generics.ListAPIView):
             return PurchaseRequest.objects.none()
         return PurchaseRequest.objects.filter(
             vendor=self.request.user
-        ).select_related('shopkeeper', 'product__category')
+        ).select_related('shopkeeper', 'product__category', 'assigned_delivery')
 
 
 class ApprovePurchaseRequestView(APIView):
@@ -269,6 +309,18 @@ class ApprovePurchaseRequestView(APIView):
             )
 
         pr.status = 'approved'
+
+        # A delivery partner is notified only after the vendor has accepted the request.
+        from django.db.models import Count, Q
+        delivery_agent = User.objects.filter(
+            role='DELIVERY', is_approved=True, is_active=True
+        ).annotate(
+            active_request_count=Count(
+                'assigned_purchase_requests',
+                filter=Q(assigned_purchase_requests__delivery_status__in=['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'])
+            )
+        ).order_by('active_request_count', 'id').first()
+        pr.assigned_delivery = delivery_agent
         pr.save()
 
         # BUG 3 FIX: deduct stock from vendor product immediately on approval
@@ -315,10 +367,27 @@ class ApprovePurchaseRequestView(APIView):
             message=f"✅ Your request for '{pr.product.name}' was approved! Set your selling price to activate it."
         )
 
+        if delivery_agent:
+            location = (
+                f"{pr.delivery_address} ({pr.latitude:.5f}, {pr.longitude:.5f})"
+                if pr.latitude is not None and pr.longitude is not None else pr.delivery_address
+            )
+            Notification.objects.create(
+                user=delivery_agent,
+                message=(f"🚚 New approved shop delivery: {pr.quantity} × '{pr.product.name}' for {pr.shopkeeper.name}. "
+                         f"Deliver to: {location}")
+            )
+        else:
+            Notification.objects.create(
+                user=pr.shopkeeper,
+                message=f"Your request for '{pr.product.name}' was approved. A delivery partner will be assigned shortly."
+            )
+
         return Response({
             'message': 'Request approved.',
             'shopkeeper_product_id': sp.id,
             'stock_remaining': pr.product.stock,
+            'delivery_assigned': bool(delivery_agent),
         })
 
 
@@ -479,7 +548,42 @@ class ShopkeeperPurchaseRequestsView(generics.ListAPIView):
             return PurchaseRequest.objects.none()
         return PurchaseRequest.objects.filter(
             shopkeeper=self.request.user
-        ).select_related('product__category', 'vendor')
+        ).select_related('product__category', 'vendor', 'assigned_delivery')
+
+
+class DeliveryPurchaseRequestsView(generics.ListAPIView):
+    """Delivery partners see vendor-to-shop orders assigned to them."""
+    serializer_class = PurchaseRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False) or self.request.user.role != 'DELIVERY':
+            return PurchaseRequest.objects.none()
+        return PurchaseRequest.objects.filter(
+            assigned_delivery=self.request.user
+        ).select_related('shopkeeper', 'vendor', 'product__category')
+
+
+class UpdatePurchaseRequestDeliveryStatusView(APIView):
+    """Delivery partner records a milestone for a shopkeeper restock delivery."""
+    permission_classes = [permissions.IsAuthenticated]
+    allowed_statuses = {'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'}
+
+    def patch(self, request, pk):
+        if request.user.role != 'DELIVERY':
+            return Response({'error': 'Only delivery partners can update delivery progress.'}, status=403)
+        purchase_request = get_object_or_404(PurchaseRequest, id=pk, assigned_delivery=request.user)
+        delivery_status = request.data.get('delivery_status')
+        if delivery_status not in self.allowed_statuses:
+            return Response({'error': 'Invalid delivery status.'}, status=400)
+        purchase_request.delivery_status = delivery_status
+        purchase_request.save(update_fields=['delivery_status', 'updated_at'])
+        Notification.objects.create(
+            user=purchase_request.shopkeeper,
+            message=(f"🚚 Delivery update for '{purchase_request.product.name}': "
+                     f"{purchase_request.get_delivery_status_display()}.")
+        )
+        return Response(PurchaseRequestSerializer(purchase_request, context={'request': request}).data)
 
 
 class PendingSetupProductsView(generics.ListAPIView):

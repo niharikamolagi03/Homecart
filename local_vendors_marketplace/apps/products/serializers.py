@@ -95,11 +95,14 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
     product_id = serializers.IntegerField(source='product.id', read_only=True)
     product_base_price = serializers.DecimalField(source='product.base_price', max_digits=10, decimal_places=2, read_only=True)
     image_url = serializers.SerializerMethodField()
+    delivery_name = serializers.CharField(source='assigned_delivery.name', read_only=True)
 
     class Meta:
         model = PurchaseRequest
         fields = ('id', 'shopkeeper_name', 'vendor_name', 'product_name', 'product_id',
-                  'product_base_price', 'image_url', 'quantity', 'status', 'created_at')
+                  'product_base_price', 'image_url', 'quantity', 'description',
+                  'delivery_address', 'latitude', 'longitude', 'assigned_delivery',
+                  'delivery_name', 'delivery_status', 'status', 'created_at')
 
     def get_image_url(self, obj):
         request = self.context.get('request')
