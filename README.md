@@ -5,7 +5,7 @@ A modern, production-ready marketplace web application built with React, TypeScr
 
 ## 🎥 Project Demo
 
-[▶️ Watch the HomeCart Demo](https://drive.google.com/file/d/1dHJyRpKjLQ5wKdd8bWB8va1g73IQxR9p/view?usp=sharing)
+[▶️ Watch the HomeCart Demo](https://youtu.be/VctEC76iN6E)
 
 ## Features
 
